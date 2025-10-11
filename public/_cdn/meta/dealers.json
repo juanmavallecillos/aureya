@@ -1,0 +1,56 @@
+{
+  "andorrano": {
+    "label": "Andorrano Joyería",
+    "country": "ES",
+    "url": "https://www.andorrano-joyeria.com/",
+    "verified": true,
+    "about": "Fundada en 1968, Andorrano Joyería es una referencia en metales preciosos en España. Especialistas en oro y plata de inversión, trabajan con lingotes y monedas de casas reconocidas.",
+    "founded_year": 1968,
+    "headquarters": "Barcelona, España",
+    "metals": ["Oro", "Plata"],
+    "forms": ["Lingotes", "Monedas"],
+    "hero_image": "https://www.andorrano-joyeria.com/images/logos/logo_andorrano_1968.png",
+    "gallery": [],
+    "physical_stores": [
+      {
+        "city": "Barcelona",
+        "address": "C/ Ejemplo 123",
+        "mapUrl": "https://maps.google.com/?q=Barcelona"
+      },
+      {
+        "city": "Cornellà",
+        "address": "C/ Ejemplo 123",
+        "mapUrl": "https://maps.google.com/?q=Cornella"
+      },
+      {
+        "city": "Madrid",
+        "address": "C/ Ejemplo 123",
+        "mapUrl": "https://maps.google.com/?q=Madrid"
+      }
+    ],
+    "shipping": "Envíos asegurados 24-72 h en península con seguimiento.",
+    "payments": ["Tarjeta", "Transferencia", "Ingreso en sucursal"],
+    "returns": "Devoluciones en 14 días para accesorios; para productos de inversión, sujeta a normativa.",
+    "social": {
+        "instagram": "https://instagram.com/andorrano1968",
+        "twitter": "https://twitter.com/andorrano1968",
+        "facebook": "https://facebook.com/andorrano1968",
+        "youtube": "https://youtube.com/@andorrano1968",
+        "tiktok": "https://www.tiktok.com/@andorrano1968"
+    }
+  },
+
+  "tuorovalemas": {
+    "label": "TuOroValeMás",
+    "country": "ES",
+    "url": "https://www.tuorovalemas.com/",
+    "verified": true,
+    "about": "Comercio español especializado en compra/venta de oro de inversión.",
+    "headquarters": "Madrid, España",
+    "metals": ["gold"],
+    "forms": ["bar", "coin"],
+    "shipping": "Envíos asegurados a península.",
+    "payments": ["Tarjeta", "Transferencia"],
+    "social": {}
+  }
+}
