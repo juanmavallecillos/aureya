@@ -1,4 +1,4 @@
-import { fetchJson } from "@/lib/cdn";
+import { fetchJson, fetchJsonOrNull } from "@/lib/cdn";
 import AllIndexTable from "@/components/AllIndexTable";
 import MicroFAQ from "@/components/MicroFAQ";
 import { getFaq, faqToJsonLd } from "@/lib/faqData";
@@ -6,7 +6,15 @@ import { getFaq, faqToJsonLd } from "@/lib/faqData";
 export const revalidate = 300;
 
 export default async function Home() {
-  const manifest = await fetchJson<any>("/prices/index/manifest.json");
+  const manifest = await fetchJsonOrNull<any>("prices/index/manifest.json", { revalidate: 300 });
+  if (!manifest) {
+    return (
+      <main className="mx-auto max-w-6xl px-4 py-12">
+        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Aureya</h1>
+        <p className="mt-2 text-zinc-600">Estamos preparando los datos. Vuelve en unos minutos.</p>
+      </main>
+    );
+  }
   const faqItems = getFaq("home");
   const faqLd = faqToJsonLd(faqItems);
 

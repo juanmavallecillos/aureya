@@ -5,7 +5,7 @@ import type { Metadata } from "next";
 import PriceChart from "@/components/PriceChart";
 import VerifiedBadge from "@/components/VerifiedBadge";
 import ProductGallery from "@/components/ProductGallery";
-import { fetchJson } from "@/lib/cdn";
+import { fetchJson, cdnPath } from "@/lib/cdn"; // ✅ importa cdnPath además de fetchJson
 import { productSlug, extractSkuFromSlugParam } from "@/lib/slug";
 
 export const revalidate = 60;
@@ -35,7 +35,6 @@ type SkuDoc = {
   updated_at: string;
   offers: Offer[];
   best?: { dealer_id: string; total_eur: number };
-  // Compat (fallback JSON-LD):
   images?: string[];
   image?: string;
 };
@@ -71,19 +70,18 @@ const niceForm = (f?: string) => {
 };
 
 function weightLabel(weight_g: unknown) {
-  const b = bucketFromWeight(weight_g);       // devuelve "1oz", "1kg", "10g", etc.
-  if (b === "1oz") return "1oz";              // fuerza 1oz si aplica
+  const b = bucketFromWeight(weight_g);
+  if (b === "1oz") return "1oz";
   if (b === "1kg") return "1kg";
-  if (b && b.endsWith("g")) return b;         // "10g", "50g", "100g"...
+  if (b && b.endsWith("g")) return b;
   const w = Math.max(1, Math.round(Number(weight_g || 0)));
   return `${w} g`;
 }
 
 function titleName(meta?: SkuDoc["meta"]) {
   if (!meta) return "";
-  const form = niceForm(meta.form);           // "Lingote" | "Moneda"
-  const metal = niceMetal(meta.metal);        // "Oro" | "Plata"...
-  // Preferimos serie si existe (p.ej. “Krugerrand”); si no, marca (p.ej. “Sempsa”)
+  const form = niceForm(meta.form);
+  const metal = niceMetal(meta.metal);
   const brandOrSeries = meta.series || meta.brand || "";
   return `${form} de ${metal}${brandOrSeries ? ` ${brandOrSeries}` : ""}`;
 }
@@ -183,21 +181,9 @@ export async function generateMetadata(
     title,
     description: `Mejores ofertas, prima y evolución de precio para ${name} (${weight} g). Datos actualizados y tiendas verificadas.`,
     alternates: { canonical },
-    openGraph: {
-      url: canonical,
-      title,
-      type: "website",
-    },
-    twitter: {
-      card: "summary_large_image",
-      title,
-      description: `Mejores ofertas de ${name} (${weight} g).`,
-    },
-    robots: {
-      index: true,
-      follow: true,
-      googleBot: { index: true, follow: true, "max-image-preview": "large" },
-    },
+    openGraph: { url: canonical, title, type: "website" },
+    twitter: { card: "summary_large_image", title, description: `Mejores ofertas de ${name} (${weight} g).` },
+    robots: { index: true, follow: true, googleBot: { index: true, follow: true, "max-image-preview": "large" } },
   };
 }
 
@@ -242,9 +228,7 @@ export default async function ProductPage(
 
   // 5) Ofertas ordenadas
   const offers = Array.isArray(data?.offers)
-    ? [...data.offers]
-        .filter((o) => o?.total_eur != null)
-        .sort((a, b) => Number(a.total_eur) - Number(b.total_eur))
+    ? [...data.offers].filter((o) => o?.total_eur != null).sort((a, b) => Number(a.total_eur) - Number(b.total_eur))
     : [];
   const best = offers[0] || null;
 
@@ -260,20 +244,19 @@ export default async function ProductPage(
     ? updatedAt.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })
     : "—";
 
-  /* 7) GALERÍA desde media/index.json (usar fetchJson con revalidate 300) */
-  const mediaIdx = await fetchJson<MediaIndex>("/media/index.json", { revalidate: 300 }).catch(
+  /* 7) GALERÍA: usar /api/cdn y URLs ya resueltas */
+  const mediaIdx = await fetchJson<MediaIndex>("media/index.json", { revalidate: 300 }).catch(
     () => ({} as MediaIndex)
-  );
+  ); // ✅ quita la barra inicial; fetchJson hace /api/cdn?path=...
   const rawPaths = Array.isArray(mediaIdx?.[data.sku]) ? mediaIdx[data.sku] : [];
   const preferred = selectPreferredImages(rawPaths);
-  // Tomamos hasta 4 (por si hay más ángulos); el componente hará hover-swap con la 2ª si existe
-  const galleryImages: string[] = preferred.slice(0, 4);
+  // ✅ pasa las rutas por cdnPath para que ProductGallery reciba URLs completas al proxy
+  const galleryImages: string[] = preferred.slice(0, 4).map((p) => cdnPath(p));
 
-  // Para JSON-LD (si no hay índice, usa fields legacy si existieran)
-  const jsonImages =
-    galleryImages.length
-      ? galleryImages.map((p) => (p.startsWith("/api/cdn?path=") ? p : `/api/cdn?path=${encodeURIComponent(p)}`))
-      : (data.images && data.images.length ? data.images : data.image ? [data.image] : []);
+  // Para JSON-LD: si hay galería, úsala directamente; si no, fallback legacy
+  const jsonImages = galleryImages.length
+    ? galleryImages
+    : (data.images && data.images.length ? data.images : data.image ? [data.image] : []);
 
   return (
     <main className="mx-auto max-w-6xl px-4 pb-16">
@@ -292,9 +275,7 @@ export default async function ProductPage(
               {bucket && <Chip>{bucket}</Chip>}
               <span className="text-sm text-zinc-600 ml-1">
                 Actualizado: <span className="font-medium">{updatedStr}</span>
-                {updatedAt && (
-                  <span className="opacity-70"> ({updatedAt.toLocaleDateString("es-ES")})</span>
-                )}
+                {updatedAt && <span className="opacity-70"> ({updatedAt.toLocaleDateString("es-ES")})</span>}
               </span>
             </div>
           </div>
@@ -307,10 +288,7 @@ export default async function ProductPage(
       {/* SEO full-width */}
       <section
         className="mt-4 rounded-lg pl-4 pr-3 py-3"
-        style={{
-          borderLeft: "4px solid hsl(var(--brand))",
-          background: "hsl(var(--brand) / 0.05)",
-        }}
+        style={{ borderLeft: "4px solid hsl(var(--brand))", background: "hsl(var(--brand) / 0.05)" }}
       >
         <h2 className="text-lg md:text-xl font-semibold text-zinc-900">
           Mejor precio y prima frente al <em>spot</em>
@@ -338,18 +316,13 @@ export default async function ProductPage(
 
           {/* Mejor oferta */}
           <div className="rounded-xl border shadow-[0_6px_20px_rgba(0,0,0,0.04)] bg-white overflow-hidden">
-            <div
-              className="px-4 py-3 border-b text-sm font-semibold text-zinc-900"
-              style={{ background: "hsl(var(--brand) / 0.06)" }}
-            >
+            <div className="px-4 py-3 border-b text-sm font-semibold text-zinc-900" style={{ background: "hsl(var(--brand) / 0.06)" }}>
               Mejor oferta
             </div>
 
             {best ? (
               <div className="p-4 md:p-5 flex flex-col sm:flex-row sm:items-center gap-4">
-                <div className="text-2xl font-bold text-zinc-900 leading-none">
-                  {fmtMoney(best.total_eur)}
-                </div>
+                <div className="text-2xl font-bold text-zinc-900 leading-none">{fmtMoney(best.total_eur)}</div>
 
                 <div className="flex-1 grid sm:grid-cols-3 gap-2 text-sm text-zinc-700">
                   <div className="flex items-center gap-2">
@@ -357,9 +330,7 @@ export default async function ProductPage(
                       <div className="text-zinc-500">Tienda</div>
                       <div className="font-medium flex items-center gap-1">
                         {getDealerLabel(best.dealer_id)}
-                        {isDealerVerified(best.dealer_id) && (
-                          <VerifiedBadge size={18} className="translate-y-[1px]" />
-                        )}
+                        {isDealerVerified(best.dealer_id) && <VerifiedBadge size={18} className="translate-y-[1px]" />}
                       </div>
                     </div>
                   </div>
@@ -382,12 +353,7 @@ export default async function ProductPage(
                   <div>
                     <div className="text-zinc-500">Extraído</div>
                     <div className="font-medium">
-                      {best.scraped_at
-                        ? new Date(best.scraped_at).toLocaleTimeString("es-ES", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })
-                        : "—"}
+                      {best.scraped_at ? new Date(best.scraped_at).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }) : "—"}
                     </div>
                   </div>
                 </div>
@@ -397,9 +363,7 @@ export default async function ProductPage(
                     href={best.buy_url}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center gap-1 rounded-lg px-4 py-2 text-sm font-medium
-                              bg-[hsl(var(--brand))] text-white hover:opacity-90 focus:outline-none
-                              focus-visible:ring-2 focus-visible:ring-[hsl(var(--brand)/0.35)]"
+                    className="inline-flex items-center gap-1 rounded-lg px-4 py-2 text-sm font-medium bg-[hsl(var(--brand))] text-white hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--brand)/0.35)]"
                     aria-label={`Comprar en ${getDealerLabel(best.dealer_id)}`}
                   >
                     Comprar
@@ -424,11 +388,7 @@ export default async function ProductPage(
         {/* Derecha: Galería (centrada) */}
         <div className="md:pl-0 self-center">
           {galleryImages.length > 0 && (
-            <ProductGallery
-              images={galleryImages}
-              altBase={name || data.sku}
-              className="max-w-[360px] mx-auto"
-            />
+            <ProductGallery images={galleryImages} altBase={name || data.sku} className="max-w-[360px] mx-auto" />
           )}
         </div>
       </section>
@@ -484,19 +444,14 @@ export default async function ProductPage(
                         <a
                           target="_blank"
                           rel="noreferrer"
-                          className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium
-                                     bg-[hsl(var(--brand))] text-white hover:opacity-90
-                                     focus-visible:ring-2 focus-visible:ring-[hsl(var(--brand)/0.35)]"
+                          className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium bg-[hsl(var(--brand))] text-white hover:opacity-90 focus-visible:ring-2 focus-visible:ring-[hsl(var(--brand)/0.35)]"
                           href={o.buy_url}
                           aria-label="Comprar"
                           title={`Comprar en ${dealerLabel}`}
                         >
                           Comprar
                           <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden>
-                            <path
-                              fill="currentColor"
-                              d="M14 3h7v7h-2V6.41l-9.29 9.3-1.42-1.42 9.3-9.29H14V3ZM5 5h6v2H7v10h10v-4h2v6H5V5Z"
-                            />
+                            <path fill="currentColor" d="M14 3h7v7h-2V6.41l-9.29 9.3-1.42-1.42 9.3-9.29H14V3ZM5 5h6v2H7v10h10v-4h2v6H5V5Z"/>
                           </svg>
                         </a>
                       ) : (
@@ -535,12 +490,7 @@ export default async function ProductPage(
           url: productUrl,
           ...(jsonImages && jsonImages.length ? { image: jsonImages } : {}),
           offers: offers.length
-            ? {
-                "@type": "AggregateOffer",
-                priceCurrency: "EUR",
-                lowPrice: Number(offers[0]?.total_eur ?? 0).toFixed(2),
-                offerCount: offers.length,
-              }
+            ? { "@type": "AggregateOffer", priceCurrency: "EUR", lowPrice: Number(offers[0]?.total_eur ?? 0).toFixed(2), offerCount: offers.length }
             : undefined,
         };
         return (
