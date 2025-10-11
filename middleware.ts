@@ -1,37 +1,65 @@
 // middleware.ts
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse, NextRequest } from "next/server";
 
-const EXEMPT = ["/unlock", "/api/unlock", "/api/cdn", "/_next", "/favicon.ico", "/robots.txt", "/sitemap.xml"];
+const PASS = process.env.SITE_PASSCODE || ""; // si lo usas
+const BYPASS = [
+  // Rutas que NO deben protegerse (necesarias en build/SSR)
+  "^/api/cdn($|/)",       // proxy CDN
+  "^/_cdn($|/)",          // estáticos del CDN local en /public/_cdn
+  "^/favicon\\.ico$",
+  "^/robots\\.txt$",
+  "^/sitemap\\.xml$",
+  "^/sitemap.*\\.xml$",   // por si tienes varios
+  "^/manifest\\.json$",
+  "^/assets($|/)",        // si tienes assets
+  "^/.*\\.(?:png|jpe?g|webp|avif|svg|ico|css|js|txt)$",
+];
 
-export function middleware(req: NextRequest) {
-  const { pathname } = req.nextUrl;
-
-  // ➜ No proteger en desarrollo o si no hay passcode
-  const isDev = process.env.NODE_ENV === "development";
-  const pass = process.env.SITE_PASSCODE || "";
-  if (isDev || !pass) return NextResponse.next();
-
-  // Rutas exentas
-  if (EXEMPT.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
-    const res = NextResponse.next();
-    res.headers.set("x-robots-tag", "noindex, nofollow, noarchive");
-    return res;
-  }
-
-  // Cookie ya desbloqueada
-  const cookie = req.cookies.get("aureya_pass");
-  const unlocked = cookie?.value === pass;
-  if (unlocked) {
-    const res = NextResponse.next();
-    res.headers.set("x-robots-tag", "noindex, nofollow, noarchive");
-    return res;
-  }
-
-  // Redirige a /unlock
-  const url = req.nextUrl.clone();
-  url.pathname = "/unlock";
-  url.searchParams.set("next", pathname);
-  return NextResponse.redirect(url);
+function isBypassed(pathname: string) {
+  return BYPASS.some((re) => new RegExp(re).test(pathname));
 }
 
-export const config = { matcher: ["/((?!.*\\.[\\w]+$).*)"] };
+export function middleware(req: NextRequest) {
+  const { pathname } = new URL(req.url);
+
+  // ✅ No proteger estas rutas
+  if (isBypassed(pathname)) return NextResponse.next();
+
+  // Si no tienes lock, deja pasar todo
+  if (!PASS) return NextResponse.next();
+
+  // Tu lógica actual de unlock (cookie, header, query…)
+  const cookie = req.cookies.get("site-pass");
+  if (cookie?.value === PASS) return NextResponse.next();
+
+  // Por comodidad, permite ?pass=... una vez (setea cookie y redirige limpio)
+  const url = new URL(req.url);
+  const pass = url.searchParams.get("pass");
+  if (pass === PASS) {
+    const res = NextResponse.redirect(new URL(url.pathname, url.origin));
+    res.cookies.set("site-pass", PASS, {
+      httpOnly: true,
+      sameSite: "lax",     // ✅ en minúsculas
+      maxAge: 60 * 60 * 24 * 7,
+      path: "/",           // (recomendado)
+      secure: process.env.NODE_ENV === "production", // (recomendado)
+    });
+    return res;
+  }
+
+  // Página de unlock minimal o 401 JSON si es API
+  if (pathname.startsWith("/api/")) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Renderiza una página sencilla (o redirige a /unlock si la tienes)
+  return NextResponse.rewrite(new URL("/unlock", req.url));
+}
+
+// ⚠️ Matcher: protege TODO salvo lo listado arriba
+export const config = {
+  matcher: [
+    // Aplica a todo, middleware internamente hace bypass por regex
+    "/:path*",
+  ],
+};
