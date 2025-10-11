@@ -1,4 +1,4 @@
-import { fetchJson, fetchJsonOrNull } from "@/lib/cdn";
+import { fetchJsonOrNullServer } from "@/lib/cdn-server";
 import AllIndexTable from "@/components/AllIndexTable";
 import MicroFAQ from "@/components/MicroFAQ";
 import { getFaq, faqToJsonLd } from "@/lib/faqData";
@@ -6,7 +6,7 @@ import { getFaq, faqToJsonLd } from "@/lib/faqData";
 export const revalidate = 300;
 
 export default async function HomePage() {
-  const manifest = await fetchJsonOrNull<any>("prices/index/manifest.json", { revalidate: 300 });
+  const manifest = await fetchJsonOrNullServer<any>("prices/index/manifest.json", { revalidate: 300 });
 
   if (!manifest) {
     return (

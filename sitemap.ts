@@ -1,7 +1,7 @@
 // app/sitemap.ts
 import type { MetadataRoute } from "next";
 import { productSlug } from "@/lib/slug";
-import { fetchJson } from "@/lib/cdn";
+import { fetchJsonOrNullServer } from "@/lib/cdn-server";
 
 /* ---------------- Config ---------------- */
 const BASE = (process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000").replace(/\/+$/, "");
@@ -42,18 +42,15 @@ const bucketFromWeight = (g: number) => {
 /* ---------------- Fetch helpers (via /api/cdn) ---------------- */
 async function loadAllOffers(): Promise<AllOffersDoc | null> {
   try {
-    return await fetchJson<AllOffersDoc>("prices/index/all_offers.json", { revalidate: 3600 });
+    return await fetchJsonOrNullServer<AllOffersDoc>("prices/index/all_offers.json", { revalidate: 3600 });
   } catch {
     return null;
   }
 }
 
 async function loadDealers(): Promise<DealersMap> {
-  try {
-    return await fetchJson<DealersMap>("meta/dealers.json", { revalidate: 3600 });
-  } catch {
-    return {};
-  }
+  const data = await fetchJsonOrNullServer<DealersMap>("meta/dealers.json", { revalidate: 3600 });
+  return data ?? {}; // <= nunca null
 }
 
 /* ---------------- Sitemap ---------------- */

@@ -2,7 +2,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import AllIndexTable from "@/components/AllIndexTable";
-import { fetchJson } from "@/lib/cdn";
+import { fetchJsonServer as fetchJson } from "@/lib/cdn-server";
 
 /* ---------------- Normalización de segmentos ---------------- */
 const toMetalToken = (m?: string) => {

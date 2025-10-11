@@ -5,7 +5,8 @@ import type { Metadata } from "next";
 import PriceChart from "@/components/PriceChart";
 import VerifiedBadge from "@/components/VerifiedBadge";
 import ProductGallery from "@/components/ProductGallery";
-import { fetchJson, cdnPath } from "@/lib/cdn"; // ✅ importa cdnPath además de fetchJson
+import { fetchJsonServer as fetchJson,
+        fetchJsonOrNullServer as fetchJsonOrnull, cdnPath } from "@/lib/cdn-server";
 import { productSlug, extractSkuFromSlugParam } from "@/lib/slug";
 
 export const revalidate = 60;
