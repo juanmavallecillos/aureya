@@ -30,16 +30,16 @@ async function fetchWithFallback(path: string, opts: FetchOpts = {}) {
       ? ({ next: { revalidate: opts.revalidate } } as any)
       : { cache: opts.cache ?? "no-store" };
 
-  // 1) Intento vía proxy /api/cdn
-  const primary = toAbsolute(cdnPath(path));
-  let res = await fetch(primary, init);
+  // ✅ 1) Primero intenta LOCAL /_cdn
+  const localUrl = toAbsolute(`/_cdn/${String(path).replace(/^\/+/, "")}`);
+  let res = await fetch(localUrl, init);
 
-  // 2) Si falla con 401/403/404/5xx → fallback directo a /_cdn
-  if (!res.ok && [401, 403, 404, 500, 502, 503, 504].includes(res.status)) {
-    const localUrl = toAbsolute(`/_cdn/${String(path).replace(/^\/+/, "")}`);
-    const res2 = await fetch(localUrl, init);
-    if (res2.ok) return res2;
-    // si el fallback también falla, usamos el primero para el mensaje/estado
+  // 2) Si local falla (404/401/5xx) → intenta proxy /api/cdn
+  if (!res.ok) {
+    const viaProxy = toAbsolute(cdnPath(path));
+    const res2 = await fetch(viaProxy, init);
+    if (res2.ok) return res2;  // si proxy funciona, devolvemos ese
+    // si ambos fallan, nos quedamos con el primero para el mensaje/estado
   }
 
   return res;
