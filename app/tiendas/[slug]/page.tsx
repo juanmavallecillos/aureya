@@ -63,9 +63,13 @@ export async function generateMetadata(
 }
 
 /* ---------------- Página (Server Component) ---------------- */
-export default async function DealerPage({ params }: { params: { slug: string } }) {
+export default async function DealerPage(
+  { params }: { params: Promise<{ slug: string }> }
+) {
+  const { slug } = await params;
+
   const dealers = await loadDealers();
-  const d = dealers[params.slug];
+  const d = dealers[slug];
 
   if (!d) {
     return (
@@ -231,7 +235,7 @@ export default async function DealerPage({ params }: { params: { slug: string } 
         A continuación, ofertas de {d.label} presentes en Aureya.
     </p>
     <div className="mt-4">
-        <AllIndexTable forceDealer={params.slug} hideDealerFacet />
+        <AllIndexTable forceDealer={slug} hideDealerFacet />
     </div>
     </section>
 
