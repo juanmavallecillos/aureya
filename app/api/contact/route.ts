@@ -4,7 +4,12 @@ import { Resend } from "resend";
 
 export const runtime = "nodejs";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// const resend = new Resend(process.env.RESEND_API_KEY);
+function getResend() {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) return null;
+  return new Resend(key);
+}
 
 // --- Rate limit en memoria (micro) ---
 const WINDOW_MS = 60 * 60 * 1000; // 10 minutos
@@ -94,6 +99,15 @@ export async function POST(req: Request) {
     `;
 
     // Enviar con Resend
+    const resend = getResend();
+    if (!resend) {
+      // No romper el build: responde 503 en runtime si no está configurado
+      return NextResponse.json(
+        { ok: false, error: "Email service not configured (RESEND_API_KEY missing)" },
+        { status: 503 }
+      );
+    }
+
     const { error } = await resend.emails.send({
       from: CONTACT_FROM,
       to: [CONTACT_TO],
