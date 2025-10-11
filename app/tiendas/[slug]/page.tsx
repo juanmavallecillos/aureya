@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { fetchJson } from "@/lib/cdn";
+import { fetchJsonOrNullServer as fetchJson } from "@/lib/cdn-server";
 import AllIndexTable from "@/components/AllIndexTable";
 import VerifiedBadge from "@/components/VerifiedBadge";
 
