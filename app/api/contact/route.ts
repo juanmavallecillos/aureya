@@ -44,7 +44,7 @@ export async function POST(req: Request) {
     const r = await resend.emails.send({
       from: CONTACT_FROM,
       to: [CONTACT_TO],
-      reply_to: from,
+      replyTo: from,
       subject,
       text,
       html,
