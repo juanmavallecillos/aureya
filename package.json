@@ -1,0 +1,31 @@
+{
+  "name": "goldcompare-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "lucide-react": "^0.545.0",
+    "next": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "recharts": "^3.2.1",
+    "resend": "^6.1.2"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.14",
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "autoprefixer": "^10.4.21",
+    "eslint": "latest",
+    "eslint-config-next": "latest",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.14",
+    "typescript": "latest"
+  }
+}

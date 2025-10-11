@@ -1,0 +1,87 @@
+@import "tailwindcss";
+
+/* --- Tema base --- */
+:root {
+  color-scheme: light;
+
+  /* Paleta Aureya */
+  --brand-h: 43;        /* tono oro cálido */
+  --brand-s: 72%;
+  --brand-l: 45%;
+  --brand: var(--brand-h) var(--brand-s) var(--brand-l);
+  --brand-ink: 222 47% 11%;     /* negro/antracita para textos */
+  --brand-cream: 48 33% 98%;    /* crema muy suave de soporte */
+
+  /* UI neutrales */
+  --color-border: 226 16% 86%;
+  --color-bg: 0 0% 100%;
+  --color-text: 222 47% 11%;
+}
+
+html { background-color: hsl(var(--color-bg)); }
+body {
+  background: transparent !important;
+  @apply text-[hsl(var(--color-text))] antialiased;
+  min-height: 100%;
+}
+html, body, #__next { min-height: 100%; }
+
+/* Evitar transiciones indeseadas de background */
+*, *::before, *::after {
+  transition-property: color, opacity, transform, box-shadow, border-color, outline-color, fill, stroke;
+}
+
+/* --- Tipografía de marca --- */
+.font-sans { font-family: var(--font-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji"; }
+.brand-wordmark { font-family: var(--font-serif), ui-serif, Georgia, Cambria, "Times New Roman", serif; letter-spacing: .2px; }
+
+/* --- Utilidades de color de marca --- */
+.text-brand { color: hsl(var(--brand)); }
+.bg-brand { background-color: hsl(var(--brand)); }
+.border-brand { border-color: hsl(var(--brand)); }
+
+/* contorno accesible al focus */
+.focus-brand:focus-visible { outline: 2px solid hsl(var(--brand)); outline-offset: 2px; }
+
+/* Botón primario de marca */
+.btn-brand {
+  @apply inline-flex items-center justify-center rounded-lg px-3 py-1.5 text-sm font-medium shadow-sm;
+  background-color: hsl(var(--brand));
+  color: hsl(var(--brand-ink));
+  border: 1px solid hsl(var(--color-border));
+}
+.btn-brand:hover { filter: brightness(1.05); }
+.btn-brand:active { filter: brightness(0.96); }
+.btn-brand { box-shadow: 0 1px 0 rgba(0,0,0,.04); }
+
+/* Link con subrayado de marca en hover */
+.link-brand-underline { border-bottom: 1px solid transparent; }
+.link-brand-underline:hover { border-bottom-color: hsl(var(--brand)); }
+
+/* --- Subrayado de marca robusto (sin interferir con borders/rounded) --- */
+.link-brand-underline { position: relative; }
+.link-brand-underline::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: -1px;  /* queda encima del hairline */
+  height: 2px;
+  background: transparent;
+  transition: background-color .25s ease-in-out;
+}
+.link-brand-underline:hover::after { background: hsl(var(--brand)); }
+.link-brand-underline.is-active::after { background: hsl(var(--brand)); } /* estado activo persistente */
+
+/* --- Componentes neutrales existentes --- */
+.card { @apply rounded-2xl border border-[hsl(var(--color-border))] shadow-sm bg-white; }
+.btn { @apply inline-flex items-center justify-center rounded-lg border border-[hsl(var(--color-border))] px-3 py-1.5 text-sm font-medium transition-colors; }
+.btn-ghost { @apply hover:bg-zinc-50; }
+.badge { @apply inline-flex items-center rounded-full border border-[hsl(var(--color-border))] px-2.5 py-0.5 text-xs font-medium; }
+.table { @apply w-full text-sm; }
+.thead { @apply bg-zinc-50 text-zinc-600; }
+.th { @apply py-3 px-4 text-left; }
+.td { @apply py-3 px-4; }
+
+/* Ancho/padding coherente para todo el contenido principal */
+.page-container {
+  @apply mx-auto w-full max-w-6xl px-4 md:px-6 lg:px-8;
+}
