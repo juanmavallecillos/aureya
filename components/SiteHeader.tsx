@@ -134,8 +134,8 @@ export default function SiteHeader() {
   const tiendasActive = pathname?.startsWith("/tiendas");
   const oroActive = pathname?.startsWith("/oro");
   const plataActive = pathname?.startsWith("/plata");
-  const aprenderActive = pathname?.startsWith("/guias") || pathname?.startsWith("/blog");
-  const utilsActive = pathname?.startsWith("/utilidades");
+  // const aprenderActive = pathname?.startsWith("/guias") || pathname?.startsWith("/blog");
+  // const utilsActive = pathname?.startsWith("/utilidades");
   const aboutActive = pathname?.startsWith("/sobre-nosotros");
   const contActive = pathname?.startsWith("/contacto");
 
@@ -196,7 +196,7 @@ export default function SiteHeader() {
           />
 
           {/* NUEVO: Utilidades (calculadoras) */}
-          <DesktopDropdown
+          {/* <DesktopDropdown
             label="Utilidades"
             href="/utilidades"
             active={!!utilsActive}
@@ -205,10 +205,10 @@ export default function SiteHeader() {
               { href: "/utilidades/calculadora-inversion", label: "Calculadora de inversión" },
               { href: "/utilidades/conversor", label: "Conversor g ↔ oz ↔ €/g" },
             ]}
-          />
+          /> */}
 
           {/* NUEVO: Aprender = Guías + Blog */}
-          <DesktopDropdown
+          {/* <DesktopDropdown
             label="Aprender"
             href="/guias"
             active={!!aprenderActive}
@@ -216,7 +216,7 @@ export default function SiteHeader() {
               { href: "/guias", label: "Guías" },
               { href: "/blog", label: "Blog" },
             ]}
-          />
+          /> */}
 
           <Link
             href="/sobre-nosotros"

@@ -1,32 +1,28 @@
 // middleware.ts
 import { NextResponse, type NextRequest } from "next/server";
 
-const EXEMPT = [
-  "/unlock",
-  "/api/unlock",
-  "/api/cdn",         // tu proxy al CDN
-  "/_next",           // estáticos Next
-  "/favicon.ico",
-  "/robots.txt",
-  "/sitemap.xml",
-];
+const EXEMPT = ["/unlock", "/api/unlock", "/api/cdn", "/_next", "/favicon.ico", "/robots.txt", "/sitemap.xml"];
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
+  // ➜ No proteger en desarrollo o si no hay passcode
+  const isDev = process.env.NODE_ENV === "development";
+  const pass = process.env.SITE_PASSCODE || "";
+  if (isDev || !pass) return NextResponse.next();
+
   // Rutas exentas
   if (EXEMPT.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
-    return NextResponse.next();
+    const res = NextResponse.next();
+    res.headers.set("x-robots-tag", "noindex, nofollow, noarchive");
+    return res;
   }
 
-  // Ya desbloqueado
+  // Cookie ya desbloqueada
   const cookie = req.cookies.get("aureya_pass");
-  const pass = process.env.SITE_PASSCODE || "";
-  const unlocked = cookie?.value && pass && cookie.value === pass;
-
+  const unlocked = cookie?.value === pass;
   if (unlocked) {
     const res = NextResponse.next();
-    // Seguridad adicional: asegura no indexar en este modo
     res.headers.set("x-robots-tag", "noindex, nofollow, noarchive");
     return res;
   }
@@ -38,9 +34,4 @@ export function middleware(req: NextRequest) {
   return NextResponse.redirect(url);
 }
 
-export const config = {
-  matcher: [
-    // protege todo excepto archivos estáticos en la raíz
-    "/((?!.*\\.[\\w]+$).*)",
-  ],
-};
+export const config = { matcher: ["/((?!.*\\.[\\w]+$).*)"] };
