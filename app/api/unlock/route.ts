@@ -1,28 +1,59 @@
 // app/api/unlock/route.ts
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
-export async function POST(req: Request) {
-  const { pass } = await req.json().catch(() => ({} as { pass?: string }));
-  const expected = process.env.SITE_PASSCODE || "";
+const PASS = (process.env.SITE_PASSCODE || "").trim();
 
-  if (!expected || pass !== expected) {
-    // Mantén el no-index en modo protegido
-    return NextResponse.json({ ok: false }, {
-      status: 401,
-      headers: { "x-robots-tag": "noindex, nofollow, noarchive" },
+export async function POST(req: NextRequest) {
+  try {
+    const { pass } = (await req.json()) as { pass?: string };
+    const provided = (pass || "").trim();
+
+    // Si no hay pass configurada, deja pasar (útil en local o si olvidas la var)
+    if (!PASS) {
+      const res = NextResponse.json({ ok: true, open: true }, { status: 200 });
+      // no seteamos cookie si no hay PASS definida
+      return res;
+    }
+
+    if (provided !== PASS) {
+      return NextResponse.json({ ok: false, error: "invalid" }, { status: 401 });
+    }
+
+    // OK → set cookie y responde 204 (sin body)
+    const res = new NextResponse(null, { status: 204 });
+    res.cookies.set("site-pass", PASS, {
+      httpOnly: true,
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24 * 7, // 7 días
+      path: "/",
+      secure: process.env.NODE_ENV === "production",
     });
+    return res;
+  } catch {
+    return NextResponse.json({ ok: false, error: "bad_request" }, { status: 400 });
+  }
+}
+
+// (Opcional) Soporte GET ?pass=... por si quieres login vía URL también aquí
+export async function GET(req: NextRequest) {
+  const url = new URL(req.url);
+  const provided = (url.searchParams.get("pass") || "").trim();
+
+  if (!PASS) {
+    return NextResponse.json({ ok: true, open: true }, { status: 200 });
   }
 
-  const res = NextResponse.json({ ok: true });
-  // Doble cinturón anti-index
-  res.headers.set("x-robots-tag", "noindex, nofollow, noarchive");
-  // Settea cookie para que el middleware te deje pasar
-  res.cookies.set("aureya_pass", expected, {
-    path: "/",
-    httpOnly: false,     // si prefieres, pon true; el middleware solo lee la cookie
+  if (provided !== PASS) {
+    return NextResponse.json({ ok: false, error: "invalid" }, { status: 401 });
+  }
+
+  const res = NextResponse.json({ ok: true }, { status: 200 });
+  res.cookies.set("site-pass", PASS, {
+    httpOnly: true,
     sameSite: "lax",
-    secure: true,
-    maxAge: 60 * 60 * 24 * 7, // 7 días
+    maxAge: 60 * 60 * 24 * 7,
+    path: "/",
+    secure: process.env.NODE_ENV === "production",
   });
   return res;
 }
