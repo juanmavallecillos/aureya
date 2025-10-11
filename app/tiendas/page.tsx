@@ -1,6 +1,6 @@
 import DealerCard from "@/components/DealerCard";
 import MicroFAQ from "@/components/MicroFAQ";
-import { fetchJson } from "@/lib/cdn";
+import { fetchJsonOrNullServer as fetchJsonOrNull } from "@/lib/cdn-server";
 import type { DealerMeta } from "@/lib/useDealerMeta";
 import { getFaq, faqToJsonLd } from "@/lib/faqData";
 import type { Metadata } from "next";
@@ -24,10 +24,10 @@ export const metadata: Metadata = {
 
 export default async function TiendasPage() {
   // 1) Metadatos de tiendas
-  const dealersMeta = await fetchJson<DealerMeta>("/meta/dealers.json");
+  const dealersMeta = await fetchJsonOrNull<DealerMeta>("/meta/dealers.json");
 
   // 2) Índice de ofertas
-  const allOffers = await fetchJson<{ offers: Offer[] }>(
+  const allOffers = await fetchJsonOrNull<{ offers: Offer[] }>(
     "/prices/index/all_offers.json"
   ).catch(() => ({ offers: [] }));
   const offers = Array.isArray(allOffers?.offers) ? allOffers.offers : [];
