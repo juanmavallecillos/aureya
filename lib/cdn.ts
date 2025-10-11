@@ -1,21 +1,29 @@
 // lib/cdn.ts
 
-/** Construye la URL al proxy local del CDN (/api/cdn) y sanea el path */
+/** Devuelve /api/cdn?path=… con el path saneado */
 export function cdnPath(path: string) {
-  const clean = String(path || "").replace(/^\/+/, ""); // quita barras iniciales
+  const clean = String(path || "").replace(/^\/+/, "");
   return `/api/cdn?path=${encodeURIComponent(clean)}`;
 }
 
+/** Convierte a URL absoluta cuando corre en servidor (Node/Edge) */
+function toAbsolute(url: string) {
+  if (typeof window !== "undefined") return url; // en cliente, relativa OK
+  const base =
+    process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/+$/, "") ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+  // new URL maneja bien paths como "/api/...":
+  return new URL(url, base).toString();
+}
+
 type FetchOpts = {
-  /** Segundos de revalidación ISR en producción (en dev se usa no-store) */
-  revalidate?: number;
-  /** Forzar cache mode si necesitas override explícito */
-  cache?: RequestCache;
+  revalidate?: number;      // ISR en prod
+  cache?: RequestCache;     // override si hace falta
 };
 
-/** Fetch JSON desde el CDN (vía /api/cdn). Lanza si !ok */
 export async function fetchJson<T>(path: string, opts: FetchOpts = {}): Promise<T> {
-  const url = cdnPath(path);
+  const rel = cdnPath(path);
+  const url = toAbsolute(rel);                 // 👈 clave: absoluta en server
   const isProd = process.env.NODE_ENV === "production";
 
   const init: RequestInit =
@@ -28,7 +36,6 @@ export async function fetchJson<T>(path: string, opts: FetchOpts = {}): Promise<
   return (await res.json()) as T;
 }
 
-/** Igual que fetchJson pero devuelve null si 404 */
 export async function fetchJsonOrNull<T>(path: string, opts: FetchOpts = {}): Promise<T | null> {
   try {
     return await fetchJson<T>(path, opts);
@@ -39,9 +46,9 @@ export async function fetchJsonOrNull<T>(path: string, opts: FetchOpts = {}): Pr
   }
 }
 
-/** Fetch texto plano desde el CDN (sitemaps, CSV, etc.) */
 export async function fetchText(path: string, opts: FetchOpts = {}): Promise<string> {
-  const url = cdnPath(path);
+  const rel = cdnPath(path);
+  const url = toAbsolute(rel);                 // 👈 también aquí
   const isProd = process.env.NODE_ENV === "production";
 
   const init: RequestInit =
