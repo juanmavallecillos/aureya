@@ -5,8 +5,9 @@ import { getFaq, faqToJsonLd } from "@/lib/faqData";
 
 export const revalidate = 300;
 
-export default async function Home() {
+export default async function HomePage() {
   const manifest = await fetchJsonOrNull<any>("prices/index/manifest.json", { revalidate: 300 });
+
   if (!manifest) {
     return (
       <main className="mx-auto max-w-6xl px-4 py-12">
