@@ -40,9 +40,12 @@ function countryName(code?: string) {
 }
 
 /* ---------------- Metadata dinámica ---------------- */
-export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
+export async function generateMetadata(
+  { params }: { params: Promise<{ slug: string }> }
+): Promise<Metadata> {
+  const { slug } = await params;
   const dealers = await loadDealers();
-  const d = dealers[params.slug];
+  const d = dealers[slug];
   if (!d) return { title: "Tienda no encontrada • Aureya" };
 
   const title = `${d.label} • Aureya`;
