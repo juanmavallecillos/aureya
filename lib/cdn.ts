@@ -23,42 +23,46 @@ type FetchOpts = {
   cache?: RequestCache;     // override si hace falta
 };
 
-export async function fetchJson<T>(path: string, opts: FetchOpts = {}): Promise<T> {
-  const rel = cdnPath(path);
-  const url = toAbsolute(rel);                 // 👈 clave: absoluta en server
+async function fetchWithFallback(path: string, opts: FetchOpts = {}) {
   const isProd = process.env.NODE_ENV === "production";
-
   const init: RequestInit =
     isProd && opts.revalidate != null
       ? ({ next: { revalidate: opts.revalidate } } as any)
       : { cache: opts.cache ?? "no-store" };
 
-  const res = await fetch(url, init);
+  // 1) Intento vía proxy /api/cdn
+  const primary = toAbsolute(cdnPath(path));
+  let res = await fetch(primary, init);
+
+  // 2) Si falla con 401/403/404/5xx → fallback directo a /_cdn
+  if (!res.ok && [401, 403, 404, 500, 502, 503, 504].includes(res.status)) {
+    const localUrl = toAbsolute(`/_cdn/${String(path).replace(/^\/+/, "")}`);
+    const res2 = await fetch(localUrl, init);
+    if (res2.ok) return res2;
+    // si el fallback también falla, usamos el primero para el mensaje/estado
+  }
+
+  return res;
+}
+
+export async function fetchJson<T>(path: string, opts: FetchOpts = {}): Promise<T> {
+  const res = await fetchWithFallback(path, opts);
   if (!res.ok) throw new Error(`CDN ${res.status} ${path}`);
   return (await res.json()) as T;
 }
 
 export async function fetchJsonOrNull<T>(path: string, opts: FetchOpts = {}): Promise<T | null> {
   try {
-    return await fetchJson<T>(path, opts);
-  } catch (e: any) {
-    const msg = typeof e?.message === "string" ? e.message : "";
-    if (msg.includes("CDN 404")) return null;
-    throw e;
+    const res = await fetchWithFallback(path, opts);
+    if (!res.ok) return null;           // ⬅️ cualquier no-OK → null
+    return (await res.json()) as T;
+  } catch {
+    return null;                         // ⬅️ cualquier excepción → null
   }
 }
 
 export async function fetchText(path: string, opts: FetchOpts = {}): Promise<string> {
-  const rel = cdnPath(path);
-  const url = toAbsolute(rel);                 // 👈 también aquí
-  const isProd = process.env.NODE_ENV === "production";
-
-  const init: RequestInit =
-    isProd && opts.revalidate != null
-      ? ({ next: { revalidate: opts.revalidate } } as any)
-      : { cache: opts.cache ?? "no-store" };
-
-  const res = await fetch(url, init);
+  const res = await fetchWithFallback(path, opts);
   if (!res.ok) throw new Error(`CDN ${res.status} ${path}`);
   return await res.text();
 }
