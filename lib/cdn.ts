@@ -9,10 +9,12 @@ export function cdnPath(path: string) {
 /** Convierte a URL absoluta cuando corre en servidor (Node/Edge) */
 export function toAbsolute(url: string) {
   if (typeof window !== "undefined") return url; // en cliente, relativa OK
+
   const base =
-    process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/+$/, "") ||
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
-  // new URL maneja bien paths como "/api/...":
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
+    (process.env.NEXT_PUBLIC_SITE_URL ? process.env.NEXT_PUBLIC_SITE_URL.replace(/\/+$/, "") : null) ||
+    "http://127.0.0.1:3000";
+
   return new URL(url, base).toString();
 }
 
