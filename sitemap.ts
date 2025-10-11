@@ -1,6 +1,7 @@
 // app/sitemap.ts
 import type { MetadataRoute } from "next";
 import { productSlug } from "@/lib/slug";
+import { fetchJson } from "@/lib/cdn";
 
 /* ---------------- Config ---------------- */
 const BASE = (process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000").replace(/\/+$/, "");
@@ -38,16 +39,10 @@ const bucketFromWeight = (g: number) => {
   return `${Math.round(g)}g`;
 };
 
-// (Opcional) Si quisieras orden "real": descomenta esto y usa sort por gramos
-// const bucketToGrams = (b: string) => (b === "1oz" ? OZ_TO_G : Number(b.replace("g", "")) || NaN);
-
-/* ---------------- Fetch helpers ---------------- */
+/* ---------------- Fetch helpers (via /api/cdn) ---------------- */
 async function loadAllOffers(): Promise<AllOffersDoc | null> {
   try {
-    const url = `${BASE}/api/cdn?path=${encodeURIComponent("prices/index/all_offers.json")}`;
-    const res = await fetch(url, { next: { revalidate: 3600 } });
-    if (!res.ok) return null;
-    return res.json();
+    return await fetchJson<AllOffersDoc>("prices/index/all_offers.json", { revalidate: 3600 });
   } catch {
     return null;
   }
@@ -55,10 +50,7 @@ async function loadAllOffers(): Promise<AllOffersDoc | null> {
 
 async function loadDealers(): Promise<DealersMap> {
   try {
-    const url = `${BASE}/api/cdn?path=${encodeURIComponent("meta/dealers.json")}`;
-    const res = await fetch(url, { next: { revalidate: 3600 } });
-    if (!res.ok) return {};
-    return res.json();
+    return await fetchJson<DealersMap>("meta/dealers.json", { revalidate: 3600 });
   } catch {
     return {};
   }
@@ -107,7 +99,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     });
   }
 
-  /* ---- Categorías dinámicas: /[metal]/[form]/[bucket] ---- */
+  /* ---- Categorías: /[metal]/[form]/[bucket] ---- */
   const bucketsByKey = new Map<string, Set<string>>();
   for (const o of offers) {
     const metal = toMetal(o.metal);
@@ -128,16 +120,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         : null;
     if (!basePath) continue;
 
-    // Orden alfabético suficiente para sitemap (estable y simple)
     const buckets = Array.from(set).sort((a, b) => a.localeCompare(b));
-
-    // Si prefieres orden "real" por gramos, usa esto en su lugar:
-    // const buckets = Array.from(set).sort((a, b) => {
-    //   const ga = bucketToGrams(a), gb = bucketToGrams(b);
-    //   if (Number.isFinite(ga) && Number.isFinite(gb)) return ga - gb;
-    //   return a.localeCompare(b);
-    // });
-
     for (const b of buckets) {
       out.push({
         url: `${BASE}${basePath}/${b}`,
@@ -148,7 +131,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }
   }
 
-  /* ---- Tiendas dinámicas: /tiendas/[dealer] ---- */
+  /* ---- Tiendas: /tiendas/[dealer] ---- */
   const dealerSlugs = Object.keys(dealersMap || {}).sort();
   for (const slug of dealerSlugs) {
     out.push({

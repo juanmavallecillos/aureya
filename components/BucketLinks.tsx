@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { cdnPath, toAbsolute } from "@/lib/cdn";
 
 /* --- Tipos mínimos del índice --- */
 type Offer = { metal: string; form: string; weight_g: number };
@@ -67,22 +68,31 @@ export default function BucketLinks({ metal, form, baseHref, className }: Props)
 
   useEffect(() => {
     let mounted = true;
+    const url = toAbsolute(cdnPath("prices/index/all_offers.json"));
+
     setLoading(true);
-    fetch(`/api/cdn?path=${encodeURIComponent("prices/index/all_offers.json")}`, { cache: "no-store" })
-      .then(r => r.json())
+    fetch(url, { cache: "no-store" })
+      .then((r) => r.json())
       .then((doc: AllOffersDoc) => {
         if (!mounted) return;
         const raw = Array.isArray(doc?.offers) ? doc.offers : [];
-        const norm = raw.map(o => ({
+        const norm = raw.map((o) => ({
           metal: toMetalToken(o.metal),
           form: toFormToken(o.form),
           weight_g: Number(o.weight_g),
         }));
         setOffers(norm);
       })
-      .catch(() => { if (mounted) setOffers([]); })
-      .finally(() => { if (mounted) setLoading(false); });
-    return () => { mounted = false; };
+      .catch(() => {
+        if (mounted) setOffers([]);
+      })
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const buckets = useMemo(() => {

@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { cdnPath, toAbsolute } from "@/lib/cdn";
 
 /** Campos enriquecidos para páginas de tiendas (listado + ficha) */
 export type DealerEntry = {
@@ -123,9 +124,11 @@ export function useDealerMeta(): DealerMeta {
 
   useEffect(() => {
     if (MEMO) return;
-    fetch(`/api/cdn?path=${encodeURIComponent(CDN_DEALERS_PATH)}`, {
-      // si prefieres que cada carga ignore caché del navegador, descomenta:
-      // cache: "no-store",
+
+    const url = toAbsolute(cdnPath(CDN_DEALERS_PATH));
+
+    fetch(url, {
+      // cache: "no-store", // si quieres forzar siempre fresco en cliente
     })
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
@@ -134,7 +137,6 @@ export function useDealerMeta(): DealerMeta {
         setMeta(norm);
       })
       .catch(() => {
-        // si falla, mantenemos objeto vacío; la UI puede degradar al slug
         MEMO = {};
         setMeta({});
       });

@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useDealerMeta } from "@/lib/useDealerMeta";
 import { productSlug } from "@/lib/slug";
-
+import { cdnPath, toAbsolute } from "@/lib/cdn";
 
 /* ---------- Tipos ---------- */
 type Offer = {
@@ -238,16 +238,27 @@ export default function AllIndexTable({
   const dealerMeta = useDealerMeta();
 
   /* ---------- Carga índice ---------- */
+
   useEffect(() => {
+    const ac = new AbortController();
+    const url = toAbsolute(cdnPath("prices/index/all_offers.json")); // ✅ URL segura en SSR/CSR
+
     setLoading(true);
-    fetch(`/api/cdn?path=${encodeURIComponent("prices/index/all_offers.json")}`, {
-      cache: "no-store",
-    })
-      .then((r) => r.json())
+    fetch(url, { cache: "no-store", signal: ac.signal })
+      .then((r) => {
+        if (!r.ok) throw new Error(`CDN ${r.status}`);
+        return r.json();
+      })
       .then((doc: AllOffersDoc) => {
         setIndexUpdatedAt(doc?.updated_at || null);
+
         const raw = Array.isArray(doc?.offers) ? doc.offers : [];
-        const norm = raw.map((o) => ({ ...o, metal: toMetalToken(o.metal), form: toFormToken(o.form) }));
+        const norm = raw.map((o) => ({
+          ...o,
+          metal: toMetalToken(o.metal),
+          form: toFormToken(o.form),
+        }));
+
         const seen = new Set<string>();
         const unique: Offer[] = [];
         for (const o of norm) {
@@ -257,21 +268,35 @@ export default function AllIndexTable({
           seen.add(key);
           unique.push(o);
         }
+
         setOffers(unique);
       })
+      .catch((err) => {
+        if (err?.name !== "AbortError") {
+          console.error("all_offers fetch error:", err);
+        }
+      })
       .finally(() => setLoading(false));
+
+    return () => ac.abort();
   }, []);
 
   /* ---------- Carga spot ---------- */
   useEffect(() => {
+    const ac = new AbortController();
+    const url = toAbsolute(cdnPath("meta/spot.json"));
+
     setSpotLoading(true);
-    fetch(`/api/cdn?path=${encodeURIComponent("meta/spot.json")}`, {
-      cache: "no-store",
-    })
+    fetch(url, { cache: "no-store", signal: ac.signal })
       .then((r) => (r.ok ? r.json() : null))
       .then((doc: SpotDoc | null) => setSpot(doc))
-      .catch(() => setSpot(null))
+      .catch((err) => {
+        if (err?.name !== "AbortError") console.error("spot fetch error:", err);
+        setSpot(null);
+      })
       .finally(() => setSpotLoading(false));
+
+    return () => ac.abort();
   }, []);
 
   /* ---------- Derivados spot (€/oz) ---------- */

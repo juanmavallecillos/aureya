@@ -7,7 +7,7 @@ export function cdnPath(path: string) {
 }
 
 /** Convierte a URL absoluta cuando corre en servidor (Node/Edge) */
-function toAbsolute(url: string) {
+export function toAbsolute(url: string) {
   if (typeof window !== "undefined") return url; // en cliente, relativa OK
   const base =
     process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/+$/, "") ||
