@@ -23,7 +23,7 @@ export default function PaginationControls({
           <select
             value={pageSize}
             onChange={(e) => onPageSizeChange(Number(e.target.value) as PageSize)}
-            className="rounded-md border px-2 py-1 text-xs bg-white"
+            className="rounded-md border px-2 py-1 text-xs bg-white cursor-pointer"
             aria-label="Filas por página"
           >
             {[10,25,50,100].map((s) => <option key={s} value={s}>{s}</option>)}
@@ -31,14 +31,14 @@ export default function PaginationControls({
         </div>
         <div className="flex items-center gap-1">
           <button onClick={prev} disabled={page===1}
-            className="rounded-md border px-2 py-1 text-xs disabled:opacity-50 bg-white hover:bg-zinc-50"
-            aria-label="Página anterior">←</button>
+            className="rounded-md border px-2 py-1 text-xs disabled:opacity-50 bg-white hover:bg-zinc-50 cursor-pointer"
+            aria-label="Página anterior">← Anterior</button>
           <div className="px-2 text-xs tabular-nums">
             <span className="font-medium">{page}</span><span className="text-zinc-500"> / {pageCount}</span>
           </div>
           <button onClick={next} disabled={page===pageCount}
-            className="rounded-md border px-2 py-1 text-xs disabled:opacity-50 bg-white hover:bg-zinc-50"
-            aria-label="Página siguiente">→</button>
+            className="rounded-md border px-2 py-1 text-xs disabled:opacity-50 bg-white hover:bg-zinc-50 cursor-pointer"
+            aria-label="Página siguiente">Siguiente →</button>
         </div>
       </div>
     </div>

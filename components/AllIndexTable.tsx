@@ -2,13 +2,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { useDealerMeta } from "@/lib/useDealerMeta";
-import { productSlug } from "@/lib/slug";
 import { cdnPath, toAbsolute } from "@/lib/cdn";
 
 // 🆕 componentes desacoplados
-import Chip from "@/components/table/Chip";
+import FiltersBarCompact from "@/components/table/FiltersBarCompact";
+import FiltersBar from "@/components/table/FiltersBar";
 import TopActions from "@/components/table/TopActions";
 import InfoBarSpot from "@/components/table/InfoBarSpot";
 import PaginationControls from "@/components/table/PaginationControls";
@@ -49,7 +48,6 @@ const fmtMoney = (v: unknown) =>
   Number.isFinite(Number(v))
     ? new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(Number(v))
     : "—";
-const fmtPct = (v: unknown) => (Number.isFinite(Number(v)) ? `${Number(v).toFixed(2)}%` : "—");
 
 // Calcula premium vs spot (€/g) usando los datos de meta/spot.json.
 // Si spot aún no está cargado, cae al premium del backend (ex envío si existe).
@@ -561,6 +559,16 @@ export default function AllIndexTable({
       return changed ? next : prev;
     });
   }, [formCounts, metalCounts, bucketCounts, forceMetal, forceForm, forceBuckets]);
+  useEffect(() => {
+    setSelDealers(prev => {
+      let changed = false;
+      const next = new Set(prev);
+      for (const d of Array.from(next)) {
+        if ((dealerCounts[d] ?? 0) === 0) { next.delete(d); changed = true; }
+      }
+      return changed ? next : prev;
+    });
+  }, [dealerCounts]);
 
   /* ---------- Helpers UI ---------- */
   const resetAll = () => {
@@ -574,128 +582,42 @@ export default function AllIndexTable({
     setPage(1);
   };
 
-  const toggleSet = (setter: (s: Set<string>) => void, current: Set<string>, value: string) => {
-    const next = new Set(current); next.has(value) ? next.delete(value) : next.add(value); setter(next);
-  };
-
   const onSort = (k: SortKey) =>
     k === sortKey ? setSortDir(nextDir(sortDir)) : (setSortKey(k), setSortDir("asc"));
-
-  const BtnBuy = ({ href, label }: { href?: string | null; label: string }) =>
-    href ? (
-      <a
-        href={href}
-        target="_blank"
-        rel="noreferrer"
-        aria-label={`Comprar en ${label}`}
-        className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium focus:outline-none btn-brand whitespace-nowrap"
-      >
-        <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden><path fill="currentColor" d="M14 3h7v7h-2V6.41l-9.29 9.3-1.42-1.42 9.3-9.29H14V3ZM5 5h6v2H7v10h10v-4h2v6H5V5Z"/></svg>
-        {`${label}`}
-      </a>
-    ) : (
-      <span className="text-zinc-400">—</span>
-    );
-
-  const BtnView = ({
-    sku,
-    slugData,
-  }: {
-    sku: string;
-    slugData: { metal: string; form: string; weight_g: number; brand?: string | null; series?: string | null };
-  }) => (
-    <Link
-      href={`/producto/${productSlug({ ...slugData, sku })}`}
-      aria-label={`Ver ficha de ${sku}`}
-      className="inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs
-      border border-[hsl(var(--brand))] text-[hsl(var(--brand))]
-      bg-[hsl(var(--brand)/0.12)] hover:bg-[hsl(var(--brand)/0.18)]
-      focus:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--brand)/0.35)]"
-      title="Ver ficha (histórico y mejores ofertas)"
-    >
-      <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden>
-        <path fill="currentColor" d="M12 5c-5 0-9 4.5-9 7s4 7 9 7 9-4.5 9-7-4-7-9-7Zm0 12c-2.8 0-5-2.24-5-5s2.2-5 5-5 5 2.24 5 5-2.2 5-5 5Zm0-8a3 3 0 1 0 .002 6.002A3 3 0 0 0 12 9Z"/>
-      </svg>
-      <span>Ver</span>
-    </Link>
-  );
 
   /* ---------- Render ---------- */
   return (
     <div className="space-y-3">
-      {/* Metal */}
-      {!hideMetalFacet && (
-        <div className="card p-3">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-zinc-600 px-1">Metal</span>
-            <Chip active={!selMetals.size} onClick={() => setSelMetals(new Set())}>Todos</Chip>
-            {metals
-              .filter((m) => selMetals.has(m) || (metalCounts[m] ?? 0) > 0)
-              .map((m) => (
-                <Chip key={m} active={selMetals.has(m)} onClick={() => toggleSet(setSelMetals, selMetals, m)}>
-                  {niceMetal[m] ?? m} {metalCounts[m] ? `(${metalCounts[m]})` : ""}
-                </Chip>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Formato */}
-      {!hideFormFacet && (
-        <div className="card p-3">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-zinc-600 px-1">Formato</span>
-            <Chip active={!selForms.size} onClick={() => setSelForms(new Set())}>Todos los formatos</Chip>
-            {forms.filter((f) => selForms.has(f) || (formCounts[f] ?? 0) > 0).map((f) => (
-              <Chip key={f} active={selForms.has(f)} onClick={() => toggleSet(setSelForms, selForms, f)}>
-                {niceForm[f] ?? f} {formCounts[f] ? `(${formCounts[f]})` : ""}
-              </Chip>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Tamaño */}
-      {!hideBucketFacet && (
-        <div className="card p-3">
-          <div className="flex items-center gap-2 overflow-x-auto pb-1">
-            <span className="text-xs text-zinc-600 px-1 shrink-0">Tamaño</span>
-            <Chip active={!selBuckets.size} onClick={() => setSelBuckets(new Set())}>Todos los tamaños</Chip>
-            {allBuckets
-              .filter((b) => selBuckets.has(b) || (bucketCounts[b] ?? 0) > 0)
-              .map((b) => (
-                <Chip key={b} active={selBuckets.has(b)} onClick={() => toggleSet(setSelBuckets, selBuckets, b)}>
-                  {b} {bucketCounts[b] ? `(${bucketCounts[b]})` : ""}
-                </Chip>
-              ))}
-          </div>
-        </div>
-      )}
-
-      {/* Tienda */}
-      {!hideDealerFacet && (
-        <div className="card p-3">
-          <div className="flex items-center gap-2 overflow-x-auto pb-1">
-            <span className="text-xs text-zinc-600 px-1 shrink-0">Tienda</span>
-            <Chip active={!selDealers.size} onClick={() => setSelDealers(new Set())}>Todas las tiendas</Chip>
-            {allDealers
-              .filter((d) => selDealers.has(d) || (dealerCounts[d] ?? 0) > 0)
-              .map((d) => {
-                const meta = dealerMeta[d];
-                if (!meta) return null;
-                const active = selDealers.has(d);
-                return (
-                  <Chip key={d} active={active} onClick={() => toggleSet(setSelDealers, selDealers, d)} className="group">
-                    <span className="inline-flex items-center gap-1">
-                      <span>{meta.label}</span>
-                      {dealerCounts[d] ? <span className="opacity-70">({dealerCounts[d]})</span> : null}
-                    </span>
-                  </Chip>
-                );
-              })}
-          </div>
-        </div>
-      )}
+      <FiltersBarCompact
+        // visibility (opcional)
+        hideMetalFacet={hideMetalFacet}
+        hideFormFacet={hideFormFacet}
+        hideBucketFacet={hideBucketFacet}
+        hideDealerFacet={hideDealerFacet}
+        // data
+        metals={metals}
+        forms={forms}
+        allBuckets={allBuckets}
+        allDealers={allDealers}
+        // selected
+        selMetals={selMetals}
+        selForms={selForms}
+        selBuckets={selBuckets}
+        selDealers={selDealers}
+        // setters
+        setSelMetals={setSelMetals}
+        setSelForms={setSelForms}
+        setSelBuckets={setSelBuckets}
+        setSelDealers={setSelDealers}
+        // counts / labels
+        metalCounts={metalCounts}
+        formCounts={formCounts}
+        bucketCounts={bucketCounts}
+        dealerCounts={dealerCounts}
+        niceMetal={niceMetal}
+        niceForm={niceForm}
+        dealerMeta={dealerMeta}
+      />
 
       {/* Tabla (desktop) con acciones y paginación arriba */}
       <div className="hidden md:block card overflow-x-auto">
@@ -703,8 +625,6 @@ export default function AllIndexTable({
         <TopActions
           q={q}
           onQ={setQ}
-          pageSize={pageSize}
-          onPageSize={(n) => { setPageSize(n); setPage(1); }}
           onReset={resetAll}
         />
 
@@ -741,14 +661,14 @@ export default function AllIndexTable({
             <table className="table w-full">
               <thead className="thead">
                 <tr>
-                  <SortableTh label="Metal"   k="metal"   w="w-24" activeKey={sortKey} dir={sortDir} onSort={onSort}/>
-                  <SortableTh label="Formato" k="form"    w="w-28" activeKey={sortKey} dir={sortDir} onSort={onSort}/>
-                  <SortableTh label="Tamaño"  k="bucket"  w="w-24" activeKey={sortKey} dir={sortDir} onSort={onSort}/>
-                  <SortableTh label="Marca / Serie" k="name" activeKey={sortKey} dir={sortDir} onSort={onSort}/>
-                  <th className="th text-center w-24">Ficha</th>
-                  <SortableTh label="Precio"  k="price"   alignRight w="w-36" activeKey={sortKey} dir={sortDir} onSort={onSort}/>
-                  <SortableTh label="Premium (s/envío)" k="premium" alignRight w="w-28" activeKey={sortKey} dir={sortDir} onSort={onSort}/>
-                  <th className="th text-right w-40">Comprar en</th>
+                  <SortableTh label="Metal"   k="metal"  align="center" w="w-24" activeKey={sortKey} dir={sortDir} onSort={onSort}/>
+                  <SortableTh label="Formato" k="form"   align="center" w="w-28" activeKey={sortKey} dir={sortDir} onSort={onSort}/>
+                  <SortableTh label="Tamaño"  k="bucket" align="center" w="w-24" activeKey={sortKey} dir={sortDir} onSort={onSort}/>
+                  <SortableTh label="Marca / Serie" k="name" align="left" activeKey={sortKey} dir={sortDir} onSort={onSort}/>
+                  <th className="th !text-center w-24">Ficha</th>
+                  <SortableTh label="Precio"  k="price"   align="center" w="w-36" activeKey={sortKey} dir={sortDir} onSort={onSort}/>
+                  <SortableTh label="Premium (s/envío)" k="premium" align="center" w="w-28" activeKey={sortKey} dir={sortDir} onSort={onSort}/>
+                  <th className="th text-left w-40">Comprar en</th>
                 </tr>
               </thead>
               <tbody className="divide-y">

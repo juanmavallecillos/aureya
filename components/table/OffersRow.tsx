@@ -108,39 +108,41 @@ export default function OffersRow({
         </div>
       </td>
 
-      <td className="td text-center">
-        <Link
-          href={`/producto/${productSlug({
-            metal: o.metal,
-            form: o.form,
-            weight_g: Number(o.weight_g),
-            brand: o.brand ?? null,
-            series: o.series ?? null,
-            sku: o.sku,
-          })}`}
-          aria-label={`Ver ficha de ${o.sku}`}
-          className="inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs
-          border border-[hsl(var(--brand))] text-[hsl(var(--brand))]
-          bg-[hsl(var(--brand)/0.12)] hover:bg-[hsl(var(--brand)/0.18)]
-          focus:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--brand)/0.35)]"
-          title="Ver ficha (histórico y mejores ofertas)"
-        >
-          <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden>
-            <path fill="currentColor" d="M12 5c-5 0-9 4.5-9 7s4 7 9 7 9-4.5 9-7-4-7-9-7Zm0 12c-2.8 0-5-2.24-5-5s2.2-5 5-5 5 2.24 5 5-2.2 5-5 5Zm0-8a3 3 0 1 0 .002 6.002A3 3 0 0 0 12 9Z"/>
-          </svg>
-          <span>Ver</span>
-        </Link>
+      <td className="td">
+        <div className="flex w-full justify-center">
+          <Link
+            href={`/producto/${productSlug({
+              metal: o.metal,
+              form: o.form,
+              weight_g: Number(o.weight_g),
+              brand: o.brand ?? null,
+              series: o.series ?? null,
+              sku: o.sku,
+            })}`}
+            aria-label={`Ver ficha de ${o.sku}`}
+            className="inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs
+            border border-[hsl(var(--brand))] text-[hsl(var(--brand))]
+            bg-[hsl(var(--brand)/0.12)] hover:bg-[hsl(var(--brand)/0.18)]
+            focus:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--brand)/0.35)]"
+            title="Ver ficha (histórico y mejores ofertas)"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden>
+              <path fill="currentColor" d="M12 5c-5 0-9 4.5-9 7s4 7 9 7 9-4.5 9-7-4-7-9-7Zm0 12c-2.8 0-5-2.24-5-5s2.2-5 5-5 5 2.24 5 5-2.2 5-5 5Zm0-8a3 3 0 1 0 .002 6.002A3 3 0 0 0 12 9Z"/>
+            </svg>
+            <span>Ver</span>
+          </Link>
+        </div>
       </td>
 
-      <td className="td text-right whitespace-nowrap tabular-nums font-semibold text-zinc-900">
+      <td className="td text-center whitespace-nowrap tabular-nums font-semibold text-zinc-900">
         {fmtMoney(o.price_eur)}
       </td>
 
-      <td className={`td text-right whitespace-nowrap tabular-nums ${premiumClass(premiumPct)}`}>
+      <td className={`td text-center whitespace-nowrap tabular-nums ${premiumClass(premiumPct)}`}>
         {fmtPct(premiumPct)}
       </td>
 
-      <td className="td text-right">
+      <td className="td text-left">
         {o.buy_url ? (
           <a
             href={o.buy_url}
