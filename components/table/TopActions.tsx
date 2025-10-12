@@ -1,38 +1,96 @@
 "use client";
-export default function TopActions({
-  q, onQ, pageSize, onPageSize, onReset,
-}: {
-  q: string; onQ: (v: string) => void;
-  pageSize: number; onPageSize: (n: number) => void;
+
+type Props = {
+  q: string;
+  onQ: (v: string) => void;
   onReset: () => void;
-}) {
+};
+
+export default function TopActions({ q, onQ, onReset }: Props) {
+  const clearSearch = () => onQ("");
+
   return (
-    <div className="flex items-center justify-between gap-3 p-3 border-b bg-zinc-50">
-      <div className="relative w-full max-w-xs">
-        <svg aria-hidden viewBox="0 0 24 24" className="absolute left-2 top-1/2 -translate-y-1/2 h-5 w-5 text-zinc-500 pointer-events-none">
-          <path fill="currentColor" d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16a6.471 6.471 0 0 0 4.23-1.57l.27.28v.79L20 21.5 21.5 20l-6-6Z"/>
+    <div
+      className="
+        flex flex-col gap-3 md:flex-row md:items-center md:justify-between
+        p-3 border-b bg-white
+      "
+    >
+      {/* Buscador */}
+      <div className="relative w-full md:max-w-sm">
+        {/* Icono lupa con cristal blanco */}
+        <svg
+          aria-hidden
+          viewBox="0 0 24 24"
+          className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-zinc-500 pointer-events-none"
+        >
+          {/* ‘Cristal’ */}
+          <circle cx="11" cy="11" r="6.5" fill="#fff" stroke="currentColor" strokeWidth="1.8" />
+          {/* Mango */}
+          <path d="M16.6 16.6L21 21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
         </svg>
+
         <input
           value={q}
-          onChange={(e)=>onQ(e.target.value)}
-          placeholder="Buscar marca/serie…"
-          className="w-full rounded-lg border pl-9 pr-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[hsl(var(--brand)/0.35)]"
+          onChange={(e) => onQ(e.target.value)}
+          placeholder="Buscar marca o serie…"
+          className="
+            w-full rounded-full border border-zinc-300 bg-white
+            pl-10 pr-10 py-2 text-sm
+            outline-none transition
+            focus:border-[hsl(var(--brand))]
+            focus:ring-2 focus:ring-[hsl(var(--brand)/0.25)]
+          "
+          aria-label="Buscar marca o serie"
         />
-      </div>
-      <div className="flex items-center gap-3">
-        <label className="text-xs text-zinc-600">
-          Filas:{" "}
-          <select
-            value={pageSize}
-            onChange={(e)=>onPageSize(Number(e.target.value))}
-            className="border rounded px-2 py-1 text-xs bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--brand)/0.35)]"
-            aria-label="Filas por página"
+
+        {/* Botón borrar búsqueda */}
+        {!!q && (
+          <button
+            type="button"
+            onClick={clearSearch}
+            className="
+              absolute right-2 top-1/2 -translate-y-1/2
+              inline-flex h-7 w-7 items-center justify-center
+              rounded-full text-zinc-500 hover:bg-zinc-100
+              focus:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--brand)/0.35)]
+              cursor-pointer
+            "
+            aria-label="Borrar búsqueda"
+            title="Borrar búsqueda"
           >
-            {[10,25,50,100].map(n => <option key={n} value={n}>{n}</option>)}
-          </select>
-        </label>
-        <button onClick={onReset} className="btn btn-ghost cursor-pointer hover:bg-zinc-100 link-brand-underline" title="Restablecer filtros">
-          Limpiar
+            <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden>
+              <path
+                fill="currentColor"
+                d="M12 10.586 16.95 5.636 18.364 7.05 13.414 12l4.95 4.95-1.414 1.414L12 13.414l-4.95 4.95-1.414-1.414L10.586 12 5.636 7.05 7.05 5.636 12 10.586Z"
+              />
+            </svg>
+          </button>
+        )}
+      </div>
+
+      {/* Acciones */}
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onReset}
+          className="
+            inline-flex items-center gap-2 rounded-full
+            border border-[hsl(var(--brand))] bg-[hsl(var(--brand)/0.06)]
+            px-4 py-2 text-sm font-medium text-[hsl(var(--brand))]
+            hover:bg-[hsl(var(--brand)/0.12)]
+            focus:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--brand)/0.35)]
+            cursor-pointer
+          "
+          title="Restablecer todos los filtros"
+        >
+          <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden>
+            <path
+              fill="currentColor"
+              d="M12 6V3L8 7l4 4V8c2.76 0 5 2.24 5 5a5 5 0 1 1-9.9 1h-2.02A7 7 0 1 0 12 6Z"
+            />
+          </svg>
+          Limpiar filtros
         </button>
       </div>
     </div>
