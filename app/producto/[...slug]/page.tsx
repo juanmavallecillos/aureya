@@ -418,9 +418,10 @@ export default async function ProductPage(
               {offers.map((o, idx) => {
                 const dealerLabel = getDealerLabel(o.dealer_id);
                 const verified = isDealerVerified(o.dealer_id);
+                const rowKey = `${o.dealer_id}|${o.buy_url ?? ''}|${o.total_eur ?? ''}|${o.scraped_at ?? ''}|${idx}`;
                 return (
                   <tr
-                    key={`${o.dealer_id}-${o.buy_url ?? idx}`}
+                    key={rowKey}
                     className={[
                       idx % 2 === 0 ? "bg-white" : "bg-zinc-50/40",
                       idx === 0 ? "bg-[hsl(var(--brand)/0.08)]" : "",
