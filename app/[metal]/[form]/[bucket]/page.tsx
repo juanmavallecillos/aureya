@@ -166,6 +166,7 @@ export default async function CategoryBucketPage(
             hideMetalFacet
             hideFormFacet
             hideBucketFacet
+            dedupeMode="none"
           />
         </div>
       </section>

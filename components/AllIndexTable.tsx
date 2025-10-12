@@ -7,6 +7,18 @@ import { useDealerMeta } from "@/lib/useDealerMeta";
 import { productSlug } from "@/lib/slug";
 import { cdnPath, toAbsolute } from "@/lib/cdn";
 
+// 🆕 componentes desacoplados
+import Chip from "@/components/table/Chip";
+import TopActions from "@/components/table/TopActions";
+import InfoBarSpot from "@/components/table/InfoBarSpot";
+import PaginationControls from "@/components/table/PaginationControls";
+import SortableTh, { type SortKey, type SortDir } from "@/components/table/SortableTh";
+import OffersRow from "@/components/table/OffersRow";
+import OfferMobileCard from "@/components/table/OfferMobileCard";
+
+// 🆕 util
+import { timeAgo } from "@/lib/format";
+
 /* ---------- Tipos ---------- */
 type Offer = {
   sku: string;
@@ -32,7 +44,7 @@ type SpotDoc = { gold_eur_per_g?: number; silver_eur_per_g?: number; updated_at?
 /* ---------- Const ---------- */
 const OZ_TO_G = 31.1034768;
 
-/* ---------- Helpers formato ---------- */
+/* ---------- Helpers formato (puedes moverlos a lib/format si quieres) ---------- */
 const fmtMoney = (v: unknown) =>
   Number.isFinite(Number(v))
     ? new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(Number(v))
@@ -42,7 +54,6 @@ const fmtPct = (v: unknown) => (Number.isFinite(Number(v)) ? `${Number(v).toFixe
 // Calcula premium vs spot (€/g) usando los datos de meta/spot.json.
 // Si spot aún no está cargado, cae al premium del backend (ex envío si existe).
 function premiumFromSpot(o: Offer, spot: SpotDoc | null): number {
-  // Fallback al premium del backend si aún no hay spot o faltan datos mínimos
   const fallback = o.premium_ex_ship_pct ?? o.premium_pct ?? NaN;
   if (!spot || !o.price_eur || !o.weight_g) return fallback;
 
@@ -54,28 +65,13 @@ function premiumFromSpot(o: Offer, spot: SpotDoc | null): number {
 
   if (!perG) return fallback;
 
-  // Si quieres incluir IVA para plata, cambia esta línea a: const basePerG = metal === "silver" ? perG * 1.21 : perG;
+  // Si quieres incluir IVA para plata, cambia a: const basePerG = metal === "silver" ? perG * 1.21 : perG;
   const basePerG = perG;
 
   const intrinsic = o.weight_g * basePerG;
   if (!Number.isFinite(intrinsic) || intrinsic <= 0) return fallback;
 
   return ((Number(o.price_eur) - intrinsic) / intrinsic) * 100;
-}
-
-/* ---------- Tiempo: “hace X” ---------- */
-function timeAgo(iso?: string | null) {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (isNaN(+d)) return "";
-  const diffSec = Math.max(0, Math.floor((Date.now() - d.getTime()) / 1000));
-  if (diffSec < 60) return `hace ${diffSec}s`;
-  const diffMin = Math.floor(diffSec / 60);
-  if (diffMin < 60) return `hace ${diffMin} min`;
-  const diffH = Math.floor(diffMin / 60);
-  if (diffH < 24) return `hace ${diffH} h`;
-  const diffD = Math.floor(diffH / 24);
-  return `hace ${diffD} día${diffD === 1 ? "" : "s"}`;
 }
 
 /* ---------- Normalización ---------- */
@@ -102,7 +98,6 @@ function bucketFromWeight(weight_g: unknown) {
   for (const s of specials) if (Math.abs(w - s) < 0.2) return `${s}g`;
   return `${Math.round(w)}g`;
 }
-
 const bucketToGrams = (b: string): number => {
   if (!b) return NaN;
   if (b === "1oz") return OZ_TO_G;
@@ -141,33 +136,7 @@ function displayName(o: Offer): string {
   return tail || "Lingote";
 }
 
-/* ---------- UI Chip ---------- */
-function Chip({
-  active,
-  onClick,
-  children,
-  className,
-}: { active?: boolean; onClick?: () => void; children: React.ReactNode; className?: string }) {
-  return (
-    <button
-      onClick={onClick}
-      className={[
-        "px-3 py-1.5 rounded-full border text-sm transition-colors cursor-pointer select-none",
-        active
-          ? "bg-[hsl(var(--brand))] text-[hsl(var(--brand-ink))] border-[hsl(var(--brand))]"
-          : "btn-ghost hover:bg-zinc-100 hover:border-zinc-300",
-        "focus:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--brand)/0.35)]",
-        className || "",
-      ].join(" ")}
-    >
-      {children}
-    </button>
-  );
-}
-
 /* ---------- Orden ---------- */
-type SortKey = "name" | "metal" | "form" | "bucket" | "dealer" | "price" | "premium";
-type SortDir = "asc" | "desc";
 const nextDir = (d?: SortDir): SortDir => (d === "asc" ? "desc" : "asc");
 const sortLabel = (key: SortKey, dir: SortDir) =>
   (key === "premium" ? "prem" : key) + (dir === "asc" ? "Asc" : "Desc");
@@ -184,22 +153,16 @@ function premiumClass(pct: unknown) {
 /* ---------- Main ---------- */
 type AllIndexProps = {
   manifest?: ManifestLike;
-  /** Fuerza el filtrado a un único dealer (no depende de la URL). */
   forceDealer?: string;
-  /** Oculta el bloque de chips "Tienda" (útil en la ficha de tienda). */
   hideDealerFacet?: boolean;
-  /** Fuerza el filtrado a un único metal (no depende de la URL). */
   forceMetal?: "gold" | "silver";
-  /** Oculta el bloque de chips "Metal" (útil en páginas de metal). */
   hideMetalFacet?: boolean;
-  /** Fuerza el formato (lingote/moneda). */
   forceForm?: "bar" | "coin";
-  /** Oculta el facet de formato. */
   hideFormFacet?: boolean;
-  /** Fuerza uno o varios buckets (ej. ["100g"] o ["1oz"]). */
   forceBuckets?: string[];
-  /** Oculta el facet de tamaño. */
   hideBucketFacet?: boolean;
+  forceSku?: string;
+  dedupeMode?: "key" | "none";
 };
 
 export default function AllIndexTable({
@@ -212,6 +175,8 @@ export default function AllIndexTable({
   hideFormFacet,
   forceBuckets,
   hideBucketFacet,
+  forceSku,
+  dedupeMode = "key",
 }: AllIndexProps) {
   const [offers, setOffers] = useState<Offer[]>([]);
   const [indexUpdatedAt, setIndexUpdatedAt] = useState<string | null>(null);
@@ -238,18 +203,51 @@ export default function AllIndexTable({
   const dealerMeta = useDealerMeta();
 
   /* ---------- Carga índice ---------- */
-
   useEffect(() => {
     const ac = new AbortController();
-    const url = toAbsolute(cdnPath("prices/index/all_offers.json")); // ✅ URL segura en SSR/CSR
-
     setLoading(true);
-    fetch(url, { cache: "no-store", signal: ac.signal })
-      .then((r) => {
+
+    const dedupeByKey = (arr: Offer[]) => {
+      const seen = new Set<string>();
+      const unique: Offer[] = [];
+      for (const o of arr) {
+        const idTail = o.buy_url ? o.buy_url : String(o.price_eur ?? "");
+        const key = `${o.sku}|${o.dealer_id}|${idTail}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        unique.push(o);
+      }
+      return unique;
+    };
+
+    const load = async () => {
+      try {
+        // --- MODO FICHA (SKU): lee /prices/sku/{SKU}.json ---
+        if (forceSku) {
+          const url = toAbsolute(cdnPath(`prices/sku/${forceSku}.json`));
+          const r = await fetch(url, { cache: "no-store", signal: ac.signal });
+          if (!r.ok) throw new Error(`CDN ${r.status}`);
+
+          const doc: { updated_at?: string; updatedAt?: string; offers?: Offer[] } = await r.json();
+          setIndexUpdatedAt(doc?.updated_at || doc?.updatedAt || null);
+
+          const raw = Array.isArray(doc?.offers) ? doc.offers : [];
+          const norm = raw.map((o) => ({
+            ...o,
+            metal: toMetalToken(o.metal as any),
+            form: toFormToken(o.form as any),
+          }));
+
+          setOffers(dedupeMode === "none" ? norm : dedupeByKey(norm));
+          return;
+        }
+
+        // --- MODO ÍNDICE: lee /prices/index/all_offers.json ---
+        const url = toAbsolute(cdnPath("prices/index/all_offers.json"));
+        const r = await fetch(url, { cache: "no-store", signal: ac.signal });
         if (!r.ok) throw new Error(`CDN ${r.status}`);
-        return r.json();
-      })
-      .then((doc: AllOffersDoc) => {
+
+        const doc: AllOffersDoc = await r.json();
         setIndexUpdatedAt(doc?.updated_at || null);
 
         const raw = Array.isArray(doc?.offers) ? doc.offers : [];
@@ -259,27 +257,19 @@ export default function AllIndexTable({
           form: toFormToken(o.form),
         }));
 
-        const seen = new Set<string>();
-        const unique: Offer[] = [];
-        for (const o of norm) {
-          const idTail = o.buy_url ? o.buy_url : String(o.price_eur ?? "");
-          const key = `${o.sku}|${o.dealer_id}|${idTail}`;
-          if (seen.has(key)) continue;
-          seen.add(key);
-          unique.push(o);
-        }
-
-        setOffers(unique);
-      })
-      .catch((err) => {
+        setOffers(dedupeMode === "none" ? norm : dedupeByKey(norm));
+      } catch (err: any) {
         if (err?.name !== "AbortError") {
           console.error("all_offers fetch error:", err);
         }
-      })
-      .finally(() => setLoading(false));
+      } finally {
+        setLoading(false);
+      }
+    };
 
+    load();
     return () => ac.abort();
-  }, []);
+  }, [forceSku, dedupeMode]);
 
   /* ---------- Carga spot ---------- */
   useEffect(() => {
@@ -317,18 +307,13 @@ export default function AllIndexTable({
     const base = manifest?.forms?.length
       ? Array.from(new Set(manifest.forms.map(toFormToken)))
       : Array.from(new Set(offers.map((o) => o.form).filter(Boolean))).sort();
-    return forceForm ? base.filter(f => f === forceForm) : base;
+    return forceForm ? base.filter((f) => f === forceForm) : base;
   }, [offers, manifest, forceForm]);
 
-  // arriba ya tienes OZ_TO_G y bucketToGrams
-
   const allBuckets = useMemo<string[]>(() => {
-    // Construye la base: o bien los buckets del manifest, o bien deduce de ofertas
     const base = manifest?.buckets?.length
       ? [...manifest.buckets]
       : Array.from(new Set(offers.map((o) => bucketFromWeight(o.weight_g))));
-
-    // Orden real por gramos (1oz = 31.1035 g)
     base.sort((a, b) => {
       const ga = bucketToGrams(a);
       const gb = bucketToGrams(b);
@@ -337,7 +322,6 @@ export default function AllIndexTable({
       if (Number.isFinite(gb)) return 1;
       return a.localeCompare(b);
     });
-
     return base;
   }, [offers, manifest?.buckets]);
 
@@ -356,13 +340,8 @@ export default function AllIndexTable({
     setSelBuckets(forceBuckets?.length ? new Set(forceBuckets) : csv(sp.get("bucket")));
     setQ(sp.get("q") || "");
 
-    // dealer: si hay forceDealer, ignoramos lo que venga en la URL y lo forzamos
-    if (forceDealer) {
-      setSelDealers(new Set([forceDealer]));
-    } else {
-      setSelDealers(csv(sp.get("dealer")));
-    }
-
+    if (forceDealer) setSelDealers(new Set([forceDealer]));
+    else setSelDealers(csv(sp.get("dealer")));
 
     const sortParam = (sp.get("sort") as string) || "priceAsc";
     const key: SortKey =
@@ -381,13 +360,8 @@ export default function AllIndexTable({
     if (!forceMetal && selMetals.size)  sp.set("metal",  Array.from(selMetals).join(","));
     if (!forceForm && selForms.size)    sp.set("form",   Array.from(selForms).join(","));
     if (!(forceBuckets?.length) && selBuckets.size) sp.set("bucket", Array.from(selBuckets).join(","));
-    if (q)               sp.set("q", q);
-
-    // Importante: si forceDealer está activo, NO escribimos "dealer" en la URL
-    // (el filtrado por tienda está bloqueado dentro del componente).
-    if (!forceDealer && selDealers.size) {
-      sp.set("dealer", Array.from(selDealers).join(","));
-    }
+    if (q) sp.set("q", q);
+    if (!forceDealer && selDealers.size) sp.set("dealer", Array.from(selDealers).join(","));
 
     const compatSort = sortLabel(sortKey, sortDir);
     if (compatSort !== "priceAsc") sp.set("sort", compatSort);
@@ -567,7 +541,7 @@ export default function AllIndexTable({
         if (prev.size === 1 && prev.has(forceMetal)) return prev;
         return new Set([forceMetal]);
       }
-      let changed = false; 
+      let changed = false;
       const next = new Set(prev);
       for (const m of Array.from(next)) {
         if ((metalCounts[m] ?? 0) === 0) { next.delete(m); changed = true; }
@@ -577,7 +551,6 @@ export default function AllIndexTable({
     setSelBuckets(prev => {
       if (forceBuckets?.length) {
         const target = new Set(forceBuckets);
-        // Evita recrear si ya coincide
         if (prev.size === target.size && Array.from(prev).every(x => target.has(x))) return prev;
         return target;
       }
@@ -604,26 +577,9 @@ export default function AllIndexTable({
   const toggleSet = (setter: (s: Set<string>) => void, current: Set<string>, value: string) => {
     const next = new Set(current); next.has(value) ? next.delete(value) : next.add(value); setter(next);
   };
-  const clickSort = (key: SortKey) => (key === sortKey ? setSortDir(nextDir(sortDir)) : (setSortKey(key), setSortDir("asc")));
 
-  const ThSortable = ({ label, k, alignRight, w }: { label: string; k: SortKey; alignRight?: boolean; w?: string }) => {
-    const active = sortKey === k; const dirArrow = active ? (sortDir === "asc" ? "▲" : "▼") : "";
-    const ariaSort = active ? (sortDir === "asc" ? "ascending" : "descending") : "none";
-    return (
-      <th
-        scope="col"
-        aria-sort={ariaSort as any}
-        onClick={() => clickSort(k)}
-        className={[
-          "th select-none cursor-pointer hover:bg-zinc-50 transition-colors",
-          alignRight ? "text-right" : "text-left",
-          w || ""
-        ].join(" ")}
-      >
-        <span className="inline-flex items-center gap-1">{label}{dirArrow && <span className="text-xs text-zinc-500">{dirArrow}</span>}</span>
-      </th>
-    );
-  };
+  const onSort = (k: SortKey) =>
+    k === sortKey ? setSortDir(nextDir(sortDir)) : (setSortKey(k), setSortDir("asc"));
 
   const BtnBuy = ({ href, label }: { href?: string | null; label: string }) =>
     href ? (
@@ -662,48 +618,6 @@ export default function AllIndexTable({
       </svg>
       <span>Ver</span>
     </Link>
-  );
-
-  const InfoBar = () => (
-    <div className="px-3 py-2 text-xs text-zinc-700 bg-white border-b flex flex-wrap items-center gap-x-4 gap-y-1">
-      {/* SPOT primero: €/g y €/oz */}
-      <div className="flex items-center gap-3">
-        <span className="font-medium text-[hsl(var(--brand))]">Spot</span>
-        {spotLoading ? (
-          <span className="opacity-70">cargando…</span>
-        ) : (
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-            <span>
-              Oro: {fmtMoney(goldEurPerG)} /g · {goldEurPerOz != null ? `${fmtMoney(goldEurPerOz)} /oz` : "—"}
-            </span>
-            <span>
-              Plata: {fmtMoney(silverEurPerG)} /g · {silverEurPerOz != null ? `${fmtMoney(silverEurPerOz)} /oz` : "—"}
-            </span>
-          </div>
-        )}
-      </div>
-
-      <div className="hidden sm:block h-3 w-px bg-zinc-200" aria-hidden />
-
-      {/* Actualizado (de meta/spot.json; fallback: índice) */}
-      <div>
-        <span className="font-medium text-[hsl(var(--brand))]">Actualizado</span>{": "}
-        {effectiveUpdatedAt ? (
-          <>
-            <span title={new Date(effectiveUpdatedAt).toLocaleString("es-ES")}>
-              {new Date(effectiveUpdatedAt).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}
-            </span>{" "}
-            <span className="opacity-70">({timeAgo(effectiveUpdatedAt)})</span>
-          </>
-        ) : <span>—</span>}
-      </div>
-    </div>
-  );
-
-  const NoteShipping = () => (
-    <div className="px-3 py-2 text-xs text-zinc-600">
-      <span className="opacity-80">Nota:</span> Envío no incluido (<span className="whitespace-nowrap">≈12 €</span> península).
-    </div>
   );
 
   /* ---------- Render ---------- */
@@ -746,17 +660,11 @@ export default function AllIndexTable({
         <div className="card p-3">
           <div className="flex items-center gap-2 overflow-x-auto pb-1">
             <span className="text-xs text-zinc-600 px-1 shrink-0">Tamaño</span>
-            <Chip active={!selBuckets.size} onClick={() => setSelBuckets(new Set())}>
-              Todos los tamaños
-            </Chip>
+            <Chip active={!selBuckets.size} onClick={() => setSelBuckets(new Set())}>Todos los tamaños</Chip>
             {allBuckets
               .filter((b) => selBuckets.has(b) || (bucketCounts[b] ?? 0) > 0)
               .map((b) => (
-                <Chip
-                  key={b}
-                  active={selBuckets.has(b)}
-                  onClick={() => toggleSet(setSelBuckets, selBuckets, b)}
-                >
+                <Chip key={b} active={selBuckets.has(b)} onClick={() => toggleSet(setSelBuckets, selBuckets, b)}>
                   {b} {bucketCounts[b] ? `(${bucketCounts[b]})` : ""}
                 </Chip>
               ))}
@@ -777,12 +685,7 @@ export default function AllIndexTable({
                 if (!meta) return null;
                 const active = selDealers.has(d);
                 return (
-                  <Chip
-                    key={d}
-                    active={active}
-                    onClick={() => toggleSet(setSelDealers, selDealers, d)}
-                    className="group"
-                  >
+                  <Chip key={d} active={active} onClick={() => toggleSet(setSelDealers, selDealers, d)} className="group">
                     <span className="inline-flex items-center gap-1">
                       <span>{meta.label}</span>
                       {dealerCounts[d] ? <span className="opacity-70">({dealerCounts[d]})</span> : null}
@@ -794,47 +697,42 @@ export default function AllIndexTable({
         </div>
       )}
 
-      {/* Tabla (desktop) con buscador integrado */}
+      {/* Tabla (desktop) con acciones y paginación arriba */}
       <div className="hidden md:block card overflow-x-auto">
-        <div className="flex items-center justify-between gap-3 p-3 border-b bg-zinc-50">
-          {/* Buscador */}
-          <div className="relative w-full max-w-xs">
-            <svg aria-hidden viewBox="0 0 24 24" className="absolute left-2 top-1/2 -translate-y-1/2 h-5 w-5 text-zinc-500 pointer-events-none">
-              <path fill="currentColor" d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16a6.471 6.471 0 0 0 4.23-1.57l.27.28v.79L20 21.5 21.5 20l-6-6Zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14Z"/>
-            </svg>
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Buscar marca/serie…"
-              className="w-full rounded-lg border pl-9 pr-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[hsl(var(--brand)/0.35)]"
+        {/* 🆕 Top bar: buscador + filas + limpiar */}
+        <TopActions
+          q={q}
+          onQ={setQ}
+          pageSize={pageSize}
+          onPageSize={(n) => { setPageSize(n); setPage(1); }}
+          onReset={resetAll}
+        />
+
+        {/* 🆕 Info spot */}
+        <InfoBarSpot
+          spotLoading={spotLoading}
+          goldEurPerG={goldEurPerG}
+          silverEurPerG={silverEurPerG}
+          goldEurPerOz={goldEurPerOz}
+          silverEurPerOz={silverEurPerOz}
+          effectiveUpdatedAt={effectiveUpdatedAt}
+        />
+
+        {/* 🆕 Paginación TOP */}
+        {!loading && (
+          <div className="px-3">
+            <PaginationControls
+              page={page}
+              pageCount={totalPages}
+              pageSize={pageSize as 10|25|50|100}
+              onPageChange={setPage}
+              onPageSizeChange={(s) => { setPageSize(s); setPage(1); }}
+              total={totalRows}
+              start={start}
+              end={end}
             />
           </div>
-
-          <div className="flex items-center gap-3">
-            {/* Filas por página */}
-            <label className="text-xs text-zinc-600">
-              Filas:{" "}
-              <select
-                value={pageSize}
-                onChange={(e) => { const n = Number(e.target.value); setPageSize(n); setPage(1); }}
-                className="border rounded px-2 py-1 text-xs bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--brand)/0.35)]"
-                aria-label="Filas por página"
-              >
-                <option value={10}>10</option>
-                <option value={25}>25</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-              </select>
-            </label>
-
-            <button onClick={resetAll} className="btn btn-ghost cursor-pointer hover:bg-zinc-100 link-brand-underline" title="Restablecer filtros">
-              Limpiar
-            </button>
-          </div>
-        </div>
-
-        {/* Info bar */}
-        <InfoBar />
+        )}
 
         {loading ? (
           <div className="p-6 text-sm text-zinc-600">Cargando…</div>
@@ -843,98 +741,63 @@ export default function AllIndexTable({
             <table className="table w-full">
               <thead className="thead">
                 <tr>
-                  <ThSortable label="Metal"   k="metal"   w="w-24" />
-                  <ThSortable label="Formato" k="form"    w="w-28" />
-                  <ThSortable label="Tamaño"  k="bucket"  w="w-24" />
-                  <ThSortable label="Marca / Serie" k="name" />
+                  <SortableTh label="Metal"   k="metal"   w="w-24" activeKey={sortKey} dir={sortDir} onSort={onSort}/>
+                  <SortableTh label="Formato" k="form"    w="w-28" activeKey={sortKey} dir={sortDir} onSort={onSort}/>
+                  <SortableTh label="Tamaño"  k="bucket"  w="w-24" activeKey={sortKey} dir={sortDir} onSort={onSort}/>
+                  <SortableTh label="Marca / Serie" k="name" activeKey={sortKey} dir={sortDir} onSort={onSort}/>
                   <th className="th text-center w-24">Ficha</th>
-                  <ThSortable label="Precio"  k="price"   alignRight w="w-36" />
-                  <ThSortable label="Premium (s/envío)" k="premium" alignRight w="w-28" />
+                  <SortableTh label="Precio"  k="price"   alignRight w="w-36" activeKey={sortKey} dir={sortDir} onSort={onSort}/>
+                  <SortableTh label="Premium (s/envío)" k="premium" alignRight w="w-28" activeKey={sortKey} dir={sortDir} onSort={onSort}/>
                   <th className="th text-right w-40">Comprar en</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
                 {pageRows.map((o, idx) => {
                   const key = `${o.sku}|${o.dealer_id}|${o.buy_url ?? o.price_eur ?? idx}`;
-                  const info = dealerMeta[o.dealer_id];
-                  const dealerLabel = info?.label ?? o.dealer_id;
+                  const dealerLabel = (dealerMeta[o.dealer_id]?.label) ?? o.dealer_id;
+                  const prem = premiumFromSpot(o, spot);
 
                   return (
-                    <tr
+                    <OffersRow
                       key={key}
-                      className={[
-                        // zebra (suave)
-                        idx % 2 === 0 ? "bg-white" : "bg-zinc-50/30",
-                        idx === 0 && page === 1 ? "bg-[hsl(var(--brand)/0.08)]" : "",
-                        "hover:bg-zinc-50 transition-colors"
-                      ].join(" ")}
-                    >
-                      <td className="td text-center text-zinc-800">{niceMetal[o.metal] ?? o.metal}</td>
-                      <td className="td text-center text-zinc-800">{niceForm[o.form] ?? o.form}</td>
-                      <td className="td text-center text-zinc-800">{bucketFromWeight(o.weight_g)}</td>
-                      <td className="td">
-                        <div className="flex min-w-0 items-center gap-2">
-                          <span className="font-medium truncate max-w-[460px] text-zinc-900" title={displayName(o)}>
-                            {displayName(o)}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="td text-center">
-                        <BtnView
-                          sku={o.sku}
-                          slugData={{
-                            metal: o.metal,
-                            form: o.form,
-                            weight_g: Number(o.weight_g),
-                            brand: o.brand ?? null,
-                            series: o.series ?? null,
-                          }}
-                        />
-                      </td>
-                      <td className="td text-right whitespace-nowrap tabular-nums font-semibold text-zinc-900">{fmtMoney(o.price_eur)}</td>
-                      <td className={`td text-right whitespace-nowrap tabular-nums ${premiumClass(premiumFromSpot(o, spot))}`}>
-                        {fmtPct(premiumFromSpot(o, spot))}
-                      </td>
-                      <td className="td text-right">
-                        <BtnBuy href={o.buy_url} label={dealerLabel} />
-                      </td>
-                    </tr>
+                      offer={o}
+                      idx={idx}
+                      page={page}
+                      dealerLabel={dealerLabel}
+                      premiumPct={Number.isFinite(prem) ? prem : null}
+                    />
                   );
                 })}
                 {!pageRows.length && (
-                  <tr><td colSpan={8} className="td text-center text-zinc-500 py-10">Sin resultados con los filtros actuales.</td></tr>
+                  <tr>
+                    <td colSpan={8} className="td text-center text-zinc-500 py-10">
+                      Sin resultados con los filtros actuales.
+                    </td>
+                  </tr>
                 )}
               </tbody>
             </table>
 
-            {/* Footer de paginación */}
-            <div className="flex items-center justify-between px-3 py-2 border-t bg-white text-sm">
-              <div className="text-zinc-600">
-                Mostrando <span className="font-medium">{totalRows ? start + 1 : 0}</span>–<span className="font-medium">{end}</span> de <span className="font-medium">{totalRows}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  className="btn btn-ghost hover:bg-zinc-100 px-3 py-1 rounded disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page <= 1}
-                  aria-label="Página anterior"
-                >
-                  ← Anterior
-                </button>
-                <span className="text-zinc-600">Página {page} de {totalPages}</span>
-                <button
-                  className="btn btn-ghost hover:bg-zinc-100 px-3 py-1 rounded disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={page >= totalPages}
-                  aria-label="Página siguiente"
-                >
-                  Siguiente →
-                </button>
-              </div>
+            {/* 🆕 Paginación BOTTOM */}
+            <div className="border-t bg-white px-3">
+              <PaginationControls
+                page={page}
+                pageCount={totalPages}
+                pageSize={pageSize as 10|25|50|100}
+                onPageChange={setPage}
+                onPageSizeChange={(s) => { setPageSize(s); setPage(1); }}
+                total={totalRows}
+                start={start}
+                end={end}
+              />
             </div>
 
             {/* Nota de envío debajo de la tabla */}
-            <NoteShipping />
+            <div className="px-3">
+              <div className="px-3 py-2 text-xs text-zinc-600">
+                <span className="opacity-80">Nota:</span> Envío no incluido (<span className="whitespace-nowrap">≈12 €</span> península).
+              </div>
+            </div>
           </>
         )}
       </div>
@@ -994,62 +857,21 @@ export default function AllIndexTable({
           <div className="card p-4 text-sm text-zinc-600">Cargando…</div>
         ) : pageRows.map((o, idx) => {
           const key = `${o.sku}|${o.dealer_id}|${o.buy_url ?? o.price_eur ?? idx}`;
-          const info = dealerMeta[o.dealer_id];
-          const dealerLabel = info?.label ?? o.dealer_id;
+          const dealerLabel = (dealerMeta[o.dealer_id]?.label) ?? o.dealer_id;
+          const prem = premiumFromSpot(o, spot);
 
           return (
-            <div key={key} className={`card p-4 ${idx === 0 && page === 1 ? "bg-[hsl(var(--brand)/50)]" : ""}`}>
-              <div className="text-xs text-zinc-600">
-                {niceMetal[o.metal]} · {niceForm[o.form]} · {bucketFromWeight(o.weight_g)}
-              </div>
-              <div className="mt-1 font-medium">{displayName(o)}</div>
-
-              <div className="mt-2 flex items-center justify-between">
-                <div>
-                  <div className="text-lg font-semibold">{fmtMoney(o.price_eur)}</div>
-                  <div className="text-xs text-zinc-600">
-                    Premium {fmtPct(premiumFromSpot(o, spot))}
-                  </div>
-                </div>
-                <a
-                  href={o.buy_url ?? "#"}
-                  target="_blank"
-                  rel="noreferrer"
-                  aria-label={`Comprar en ${dealerLabel}`}
-                  className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium focus:outline-none btn-brand"
-                >
-                  Comprar
-                </a>
-              </div>
-
-              <div className="mt-2 flex items-center gap-2">
-                {/* En móvil mantenemos el enlace tipo “pill” */}
-                <Link
-                  href={`/producto/${productSlug({
-                    metal: o.metal,
-                    form: o.form,
-                    weight_g: Number(o.weight_g),
-                    brand: o.brand ?? null,
-                    series: o.series ?? null,
-                    sku: o.sku,
-                  })}`}
-                  aria-label={`Ver ficha de ${o.sku}`}
-                  className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full whitespace-nowrap
-                  border border-[hsl(var(--brand))] text-[hsl(var(--brand))]
-                  bg-[hsl(var(--brand)/0.10)] hover:bg-[hsl(var(--brand)/0.16)]
-                  focus-visible:ring-2 focus-visible:ring-[hsl(var(--brand)/0.35)]"
-                  title="Ver ficha (histórico y mejores ofertas)"
-                >
-                  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" aria-hidden>
-                    <path fill="currentColor" d="M11 7h2v2h-2V7Zm0 4h2v6h-2v-6Zm1-9C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2Z"/>
-                  </svg>
-                  Ficha
-                </Link>
-                <span className="text-xs text-zinc-600">Dealer: {dealerLabel}</span>
-              </div>
-            </div>
+            <OfferMobileCard
+              key={key}
+              offer={o}
+              idx={idx}
+              page={page}
+              dealerLabel={dealerLabel}
+              premiumPct={Number.isFinite(prem) ? prem : null}
+            />
           );
         })}
+
         {!loading && !pageRows.length && <div className="text-center text-zinc-500">Sin resultados con los filtros actuales.</div>}
 
         {/* Paginación móvil */}
@@ -1081,7 +903,11 @@ export default function AllIndexTable({
         )}
 
         {/* Nota de envío debajo del listado móvil */}
-        {!loading && <NoteShipping />}
+        {!loading && (
+          <div className="px-3 py-2 text-xs text-zinc-600">
+            <span className="opacity-80">Nota:</span> Envío no incluido (<span className="whitespace-nowrap">≈12 €</span> península).
+          </div>
+        )}
       </div>
     </div>
   );
