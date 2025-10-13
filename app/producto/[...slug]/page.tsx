@@ -87,6 +87,14 @@ function titleName(meta?: SkuDoc["meta"]) {
   return `${form} de ${metal}${brandOrSeries ? ` ${brandOrSeries}` : ""}`;
 }
 
+function premiumClass(pct: unknown) {
+  const v = Number(pct);
+  if (!Number.isFinite(v)) return "text-zinc-700";
+  if (v <= 5) return "text-emerald-600";
+  if (v <= 10) return "text-amber-600";
+  return "text-rose-600";
+}
+
 /* ---------- Título legible ---------- */
 function displayName(meta?: SkuDoc["meta"]) {
   if (!meta) return "";
@@ -306,9 +314,10 @@ export default async function ProductPage(
         {/* Izquierda: Spot + Mejor oferta + Histórico */}
         <div className="space-y-6">
           {/* Info bar: spot */}
-          <div className="text-xs text-zinc-700 bg-white border rounded-lg overflow-hidden">
-            <div className="px-3 py-2 flex flex-wrap items-center gap-x-5 gap-y-1">
-              <span className="font-medium text-[hsl(var(--brand))]">Spot</span>
+          <div className="relative overflow-hidden rounded-2xl border border-zinc-200/70 bg-white shadow-[0_12px_30px_rgba(0,0,0,0.06)]">
+            <div className="absolute inset-x-0 top-0 h-1 bg-[hsl(var(--brand)/0.9)]" />
+            <div className="px-4 py-3 text-xs text-zinc-700 flex flex-wrap items-center gap-x-6 gap-y-1">
+              <span className="font-semibold text-zinc-900">Spot</span>
               <span>€/g: <strong>{spotPerG != null ? fmtMoney(spotPerG) : "—"}</strong></span>
               <span>€/oz: <strong>{spotPerOz != null ? fmtMoney(spotPerOz) : "—"}</strong></span>
               <span className="opacity-70">Fuente: meta del SKU</span>
@@ -316,23 +325,29 @@ export default async function ProductPage(
           </div>
 
           {/* Mejor oferta */}
-          <div className="rounded-xl border shadow-[0_6px_20px_rgba(0,0,0,0.04)] bg-white overflow-hidden">
-            <div className="px-4 py-3 border-b text-sm font-semibold text-zinc-900" style={{ background: "hsl(var(--brand) / 0.06)" }}>
+          <div className="relative overflow-hidden rounded-2xl border border-zinc-200/70 bg-white shadow-[0_12px_30px_rgba(0,0,0,0.06)]">
+            <div className="absolute inset-x-0 top-0 h-1 bg-[hsl(var(--brand)/0.9)]" />
+            <div className="px-4 py-3 border-b text-sm font-semibold text-zinc-900">
               Mejor oferta
             </div>
 
             {best ? (
               <div className="p-4 md:p-5 flex flex-col sm:flex-row sm:items-center gap-4">
-                <div className="text-2xl font-bold text-zinc-900 leading-none">{fmtMoney(best.total_eur)}</div>
+                <div className="shrink-0">
+                  <div className="text-[22px] md:text-2xl font-extrabold leading-none text-zinc-900">
+                    {fmtMoney(best.total_eur)}
+                  </div>
+                  <div className="mt-0.5 text-xs text-zinc-500">Total (producto + envío)</div>
+                </div>
 
-                <div className="flex-1 grid sm:grid-cols-3 gap-2 text-sm text-zinc-700">
-                  <div className="flex items-center gap-2">
-                    <div>
-                      <div className="text-zinc-500">Tienda</div>
-                      <div className="font-medium flex items-center gap-1">
-                        {getDealerLabel(best.dealer_id)}
-                        {isDealerVerified(best.dealer_id) && <VerifiedBadge size={18} className="translate-y-[1px]" />}
-                      </div>
+                <div className="flex-1 grid sm:grid-cols-3 gap-3 text-sm text-zinc-700">
+                  <div>
+                    <div className="text-zinc-500">Tienda</div>
+                    <div className="font-medium flex items-center gap-1">
+                      {getDealerLabel(best.dealer_id)}
+                      {isDealerVerified(best.dealer_id) && (
+                        <VerifiedBadge size={18} className="translate-y-[1px]" />
+                      )}
                     </div>
                   </div>
                   <div>
@@ -354,7 +369,9 @@ export default async function ProductPage(
                   <div>
                     <div className="text-zinc-500">Extraído</div>
                     <div className="font-medium">
-                      {best.scraped_at ? new Date(best.scraped_at).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }) : "—"}
+                      {best.scraped_at
+                        ? new Date(best.scraped_at).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })
+                        : "—"}
                     </div>
                   </div>
                 </div>
@@ -364,7 +381,9 @@ export default async function ProductPage(
                     href={best.buy_url}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center gap-1 rounded-lg px-4 py-2 text-sm font-medium bg-[hsl(var(--brand))] text-white hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--brand)/0.35)]"
+                    className="inline-flex items-center justify-center gap-1 rounded-lg px-4 py-2 text-sm font-medium
+                              bg-[hsl(var(--brand))] text-white hover:opacity-90 focus-visible:ring-2
+                              focus-visible:ring-[hsl(var(--brand)/0.35)] w-full sm:w-auto"
                     aria-label={`Comprar en ${getDealerLabel(best.dealer_id)}`}
                   >
                     Comprar
@@ -379,17 +398,26 @@ export default async function ProductPage(
             )}
           </div>
 
-          {/* Histórico dentro de la columna izquierda */}
-          <div className="rounded-xl border bg-white p-3 md:p-4">
-            <h2 className="text-base md:text-lg font-semibold mb-2">Histórico (mejor precio diario)</h2>
-            <PriceChart data={history?.series ?? []} />
+          <div className="relative overflow-hidden rounded-2xl border border-zinc-200/70 bg-white shadow-[0_12px_30px_rgba(0,0,0,0.06)]">
+            <div className="absolute inset-x-0 top-0 h-1 bg-[hsl(var(--brand)/0.9)]" />
+            <div className="p-3 md:p-4">
+              <h2 className="text-base md:text-lg font-semibold mb-2">Histórico (mejor precio diario)</h2>
+              <PriceChart data={history?.series ?? []} />
+            </div>
           </div>
         </div>
 
-        {/* Derecha: Galería (centrada) */}
-        <div className="md:pl-0 self-center">
+        {/* Derecha: Galería */}
+        <div className="md:pl-0 self-center md:self-start md:sticky md:top-24">
           {galleryImages.length > 0 && (
-            <ProductGallery images={galleryImages} altBase={name || data.sku} className="max-w-[360px] mx-auto" />
+            <div className="relative overflow-hidden rounded-2xl border border-zinc-200/70 bg-white shadow-[0_12px_30px_rgba(0,0,0,0.06)] p-3">
+              <div className="absolute inset-x-0 top-0 h-1 bg-[hsl(var(--brand)/0.9)]" />
+              <ProductGallery
+                images={galleryImages}
+                altBase={name || data.sku}
+                className="max-w-[360px] mx-auto"
+              />
+            </div>
           )}
         </div>
       </section>
@@ -401,60 +429,71 @@ export default async function ProductPage(
           Ordenadas por <em>total</em> (precio + envío). La primera fila coincide con la mejor oferta.
         </p>
 
-        <div className="mt-3 overflow-x-auto rounded-xl border bg-white">
-          <table className="min-w-[860px] w-full text-sm">
-            <thead className="bg-zinc-50 text-zinc-600">
+        <div className="mt-3 overflow-x-auto rounded-2xl border border-zinc-200/70 bg-white">
+          <table className="min-w-[860px] w-full text-sm border-separate border-spacing-y-2">
+            <thead className="sticky top-0 z-10 bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/60">
               <tr>
-                <th className="th text-left w-52 px-4 py-2.5">Tienda</th>
-                <th className="th text-right w-28 px-4 py-2.5">Precio</th>
-                <th className="th text-right w-28 px-4 py-2.5">Envío</th>
-                <th className="th text-right w-32 px-4 py-2.5">Total</th>
-                <th className="th text-right w-32 px-4 py-2.5">Prima</th>
-                <th className="th text-center w-28 px-4 py-2.5">Stock</th>
-                <th className="th text-right w-40 px-4 py-2.5">Comprar</th>
+                <th className="th text-left w-52 px-4 py-2.5 bg-zinc-50/60 text-[13px] font-semibold text-zinc-700">Tienda</th>
+                <th className="th text-right w-28 px-4 py-2.5 bg-zinc-50/60 text-[13px] font-semibold text-zinc-700">Precio</th>
+                <th className="th text-right w-28 px-4 py-2.5 bg-zinc-50/60 text-[13px] font-semibold text-zinc-700">Envío</th>
+                <th className="th text-right w-32 px-4 py-2.5 bg-zinc-50/60 text-[13px] font-semibold text-zinc-700">Total</th>
+                <th className="th text-right w-32 px-4 py-2.5 bg-zinc-50/60 text-[13px] font-semibold text-zinc-700">Prima</th>
+                <th className="th text-center w-28 px-4 py-2.5 bg-zinc-50/60 text-[13px] font-semibold text-zinc-700">Stock</th>
+                <th className="th text-right w-40 px-4 py-2.5 bg-zinc-50/60 text-[13px] font-semibold text-zinc-700">Comprar</th>
               </tr>
             </thead>
-            <tbody className="divide-y">
+
+            <tbody>
               {offers.map((o, idx) => {
                 const dealerLabel = getDealerLabel(o.dealer_id);
                 const verified = isDealerVerified(o.dealer_id);
                 const rowKey = `${o.dealer_id}|${o.buy_url ?? ''}|${o.total_eur ?? ''}|${o.scraped_at ?? ''}|${idx}`;
+
                 return (
                   <tr
                     key={rowKey}
                     className={[
-                      idx % 2 === 0 ? "bg-white" : "bg-zinc-50/40",
-                      idx === 0 ? "bg-[hsl(var(--brand)/0.08)]" : "",
-                      "hover:bg-zinc-50 transition-colors",
+                      "bg-white",
+                      idx === 0 ? "bg-[hsl(var(--brand)/0.06)]" : "",
+                      // estilo “card row”
+                      "rounded-xl border border-zinc-200/70 shadow-[0_2px_8px_rgba(0,0,0,0.03)]",
+                      "hover:bg-white hover:shadow-[0_4px_14px_rgba(0,0,0,0.05)] transition"
                     ].join(" ")}
                   >
-                    <td className="td px-4 py-2.5">
+                    <td className="td px-4 py-2.5 first:rounded-l-xl">
                       <div className="inline-flex items-center gap-1.5">
-                        <span className="font-medium">{dealerLabel}</span>
+                        <span className="font-medium text-zinc-900">{dealerLabel}</span>
                         {verified ? <VerifiedBadge size={16} className="translate-y-[1px]" /> : null}
                       </div>
                     </td>
+
                     <td className="td text-right tabular-nums px-4 py-2.5">{fmtMoney(o.price_eur)}</td>
                     <td className="td text-right tabular-nums px-4 py-2.5">{fmtMoney(o.shipping_eur)}</td>
-                    <td className="td text-right tabular-nums font-semibold text-zinc-900 px-4 py-2.5">
+
+                    <td className="td text-right tabular-nums px-4 py-2.5 font-semibold text-zinc-900">
                       {fmtMoney(o.total_eur)}
                     </td>
-                    <td className="td text-right tabular-nums px-4 py-2.5">{fmtPct(o.premium_pct)}</td>
+
+                    <td className={`td text-right tabular-nums px-4 py-2.5 ${premiumClass(o.premium_pct)}`}>
+                      {fmtPct(o.premium_pct)}
+                    </td>
+
                     <td className="td text-center px-4 py-2.5">{o.stock ?? "—"}</td>
-                    <td className="td text-right px-4 py-2.5">
+
+                    <td className="td text-right px-4 py-2.5 last:rounded-r-xl">
                       {o.buy_url ? (
                         <a
                           target="_blank"
                           rel="noreferrer"
-                          className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium bg-[hsl(var(--brand))] text-white hover:opacity-90 focus-visible:ring-2 focus-visible:ring-[hsl(var(--brand)/0.35)]"
+                          className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium btn-brand"
                           href={o.buy_url}
                           aria-label="Comprar"
                           title={`Comprar en ${dealerLabel}`}
                         >
-                          Comprar
                           <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden>
                             <path fill="currentColor" d="M14 3h7v7h-2V6.41l-9.29 9.3-1.42-1.42 9.3-9.29H14V3ZM5 5h6v2H7v10h10v-4h2v6H5V5Z"/>
                           </svg>
+                          Comprar
                         </a>
                       ) : (
                         <span className="text-zinc-400">—</span>
@@ -463,6 +502,7 @@ export default async function ProductPage(
                   </tr>
                 );
               })}
+
               {!offers.length && (
                 <tr>
                   <td colSpan={7} className="td text-center text-zinc-500 py-8">
@@ -472,6 +512,7 @@ export default async function ProductPage(
               )}
             </tbody>
           </table>
+
           <div className="px-3 py-2 text-xs text-zinc-600">
             Nota: la prima se muestra sin envío. El coste de envío exacto se confirma en la tienda.
           </div>

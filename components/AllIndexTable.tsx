@@ -743,7 +743,7 @@ export default function AllIndexTable({
         <div className="card p-3 text-xs text-zinc-600">
           <div className="flex flex-col gap-1">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <span className="font-medium">Spot</span>
+              <span className="font-medium text-[hsl(var(--brand))]">Spot</span>
               {spotLoading ? (
                 <span className="opacity-70">cargando…</span>
               ) : (
@@ -760,7 +760,7 @@ export default function AllIndexTable({
               )}
             </div>
             <div>
-              <span className="font-medium">Actualizado</span>{": "}
+              <span className="font-medium text-[hsl(var(--brand))]">Actualizado</span>{": "}
               {effectiveUpdatedAt ? (
                 <>
                   <span title={new Date(effectiveUpdatedAt).toLocaleString("es-ES")}>
@@ -770,6 +770,65 @@ export default function AllIndexTable({
                 </>
               ) : <span>—</span>}
             </div>
+          </div>
+        </div>
+
+        {/* Controles (mobile): ordenar + paginación TOP */}
+        {!loading && (
+          <div className="card p-3 space-y-2">
+            {/* Ordenar */}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-zinc-600">Ordenar:</span>
+              <select
+                value={sortKey}
+                onChange={(e) => setSortKey(e.target.value as SortKey)}
+                className="cursor-pointer rounded border px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--brand)/0.35)]"
+                aria-label="Ordenar por"
+              >
+                <option value="price">Precio</option>
+                <option value="premium">Premium (s/envío)</option>
+                <option value="name">Marca / Serie</option>
+                <option value="metal">Metal</option>
+                <option value="form">Formato</option>
+                <option value="bucket">Tamaño</option>
+                <option value="dealer">Tienda</option>
+              </select>
+
+              <button
+                onClick={() => setSortDir(sortDir === "asc" ? "desc" : "asc")}
+                className="cursor-pointer inline-flex items-center gap-1 rounded border px-2 py-1 text-sm hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-[hsl(var(--brand)/0.35)]"
+                aria-label={`Cambiar dirección (${sortDir === "asc" ? "ascendente" : "descendente"})`}
+                title={sortDir === "asc" ? "Ascendente" : "Descendente"}
+              >
+                {sortDir === "asc" ? "▲" : "▼"}
+                <span className="text-xs text-zinc-600">{sortDir === "asc" ? "Asc" : "Desc"}</span>
+              </button>
+
+              <div className="ml-auto text-xs text-zinc-600">
+                {totalRows ? `${start + 1}–${end} de ${totalRows}` : "0 resultados"}
+              </div>
+            </div>
+
+            {/* Paginación TOP (mismo componente que desktop) */}
+            <PaginationControls
+              page={page}
+              pageCount={totalPages}
+              pageSize={pageSize as 10|25|50|100}
+              onPageChange={setPage}
+              onPageSizeChange={(s) => { setPageSize(s); setPage(1); }}
+              total={totalRows}
+              start={start}
+              end={end}
+            />
+          </div>
+        )}
+
+        {/* Encabezado sutil tipo “tabla” */}
+        <div className="px-3">
+          <div className="rounded-lg bg-zinc-50 text-[11px] text-zinc-600 px-2 py-1.5">
+            Tabla de ofertas · orden: <span className="font-medium">{(
+              { price:"Precio", premium:"Premium", name:"Marca/Serie", metal:"Metal", form:"Formato", bucket:"Tamaño", dealer:"Tienda" } as Record<SortKey,string>
+            )[sortKey]}</span> <span className="opacity-70">({sortDir === "asc" ? "Asc" : "Desc"})</span>
           </div>
         </div>
 
@@ -794,31 +853,19 @@ export default function AllIndexTable({
 
         {!loading && !pageRows.length && <div className="text-center text-zinc-500">Sin resultados con los filtros actuales.</div>}
 
-        {/* Paginación móvil */}
+        {/* Paginación BOTTOM (mismo componente que desktop) */}
         {!loading && (
-          <div className="flex items-center justify-between p-2 text-sm">
-            <div className="text-zinc-600">
-              Mostrando <span className="font-medium">{totalRows ? start + 1 : 0}</span>–<span className="font-medium">{end}</span> de <span className="font-medium">{totalRows}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                className="btn btn-ghost hover:bg-zinc-100 px-3 py-1 rounded disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page <= 1}
-                aria-label="Página anterior"
-              >
-                ←
-              </button>
-              <span className="text-zinc-600"> {page}/{totalPages} </span>
-              <button
-                className="btn btn-ghost hover:bg-zinc-100 px-3 py-1 rounded disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page >= totalPages}
-                aria-label="Página siguiente"
-              >
-                →
-              </button>
-            </div>
+          <div className="px-3">
+            <PaginationControls
+              page={page}
+              pageCount={totalPages}
+              pageSize={pageSize as 10|25|50|100}
+              onPageChange={setPage}
+              onPageSizeChange={(s) => { setPageSize(s); setPage(1); }}
+              total={totalRows}
+              start={start}
+              end={end}
+            />
           </div>
         )}
 

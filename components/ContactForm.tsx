@@ -91,7 +91,7 @@ export default function ContactForm({ className }: Props) {
         <div className="flex items-center gap-2 rounded-lg border bg-white px-3 py-2 focus-within:ring-2 focus-within:ring-[hsl(var(--brand)/0.35)]">
           <FileText className="h-4 w-4 text-zinc-400" />
           <select
-            className="w-full text-sm outline-none bg-transparent"
+            className="cursor-pointer w-full text-sm outline-none bg-transparent"
             value={topic}
             onChange={(e) => setTopic(e.target.value)}
             disabled={disabled}

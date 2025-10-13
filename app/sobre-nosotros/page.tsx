@@ -55,7 +55,7 @@ export default function AboutPage() {
 
       {/* Grid de “pilares” (cards premium) */}
       <section className="mt-6 grid gap-6 md:grid-cols-3">
-        <article className="relative overflow-hidden rounded-2xl border bg-white shadow-[0_12px_30px_rgba(0,0,0,0.06)]">
+        <article className="relative overflow-hidden rounded-2xl bg-white ring-1 ring-inset ring-zinc-200 shadow-sm transition-shadow hover:shadow-md">
           <div className="absolute inset-x-0 top-0 h-1 bg-[hsl(var(--brand)/0.9)]" />
           <div className="p-5">
             <div className="flex items-center gap-2">
@@ -69,7 +69,7 @@ export default function AboutPage() {
           </div>
         </article>
 
-        <article className="relative overflow-hidden rounded-2xl border bg-white shadow-[0_12px_30px_rgba(0,0,0,0.06)]">
+        <article className="relative overflow-hidden rounded-2xl bg-white ring-1 ring-inset ring-zinc-200 shadow-sm transition-shadow hover:shadow-md">
           <div className="absolute inset-x-0 top-0 h-1 bg-[hsl(var(--brand)/0.9)]" />
           <div className="p-5">
             <div className="flex items-center gap-2">
@@ -83,7 +83,7 @@ export default function AboutPage() {
           </div>
         </article>
 
-        <article className="relative overflow-hidden rounded-2xl border bg-white shadow-[0_12px_30px_rgba(0,0,0,0.06)]">
+        <article className="relative overflow-hidden rounded-2xl bg-white ring-1 ring-inset ring-zinc-200 shadow-sm transition-shadow hover:shadow-md">
           <div className="absolute inset-x-0 top-0 h-1 bg-[hsl(var(--brand)/0.9)]" />
           <div className="p-5">
             <div className="flex items-center gap-2">
@@ -100,7 +100,7 @@ export default function AboutPage() {
 
       {/* Cómo trabajamos (pipeline visual) */}
       <section className="mt-8 grid gap-6 md:grid-cols-2">
-        <article className="relative overflow-hidden rounded-2xl border bg-white shadow-[0_12px_30px_rgba(0,0,0,0.06)]">
+        <article className="relative overflow-hidden rounded-2xl bg-white ring-1 ring-inset ring-zinc-200 shadow-sm transition-shadow hover:shadow-md">
           <div className="absolute inset-x-0 top-0 h-1 bg-[hsl(var(--brand)/0.9)]" />
           <div className="p-5">
             <div className="flex items-center gap-2">
@@ -116,7 +116,7 @@ export default function AboutPage() {
           </div>
         </article>
 
-        <article className="relative overflow-hidden rounded-2xl border bg-white shadow-[0_12px_30px_rgba(0,0,0,0.06)]">
+        <article className="relative overflow-hidden rounded-2xl bg-white ring-1 ring-inset ring-zinc-200 shadow-sm transition-shadow hover:shadow-md">
           <div className="absolute inset-x-0 top-0 h-1 bg-[hsl(var(--brand)/0.9)]" />
           <div className="p-5">
             <div className="flex items-center gap-2">
@@ -132,7 +132,7 @@ export default function AboutPage() {
       </section>
 
       {/* Roadmap/Compromiso (mini CTA) */}
-      <section className="mt-8 relative overflow-hidden rounded-2xl border bg-white shadow-[0_12px_30px_rgba(0,0,0,0.06)]">
+      <section className="mt-8 relative overflow-hidden rounded-2xl bg-white ring-1 ring-inset ring-zinc-200 shadow-sm transition-shadow hover:shadow-md">
         <div className="absolute inset-x-0 top-0 h-1 bg-[hsl(var(--brand)/0.9)]" />
         <div className="p-5 md:p-6">
           <div className="flex items-center gap-2">

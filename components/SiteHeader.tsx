@@ -5,7 +5,6 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 
 /* --- Dropdown controlado por estado (desktop) --- */
-/* --- Dropdown controlado por estado (desktop) --- */
 function DesktopDropdown({
   label,
   href,
@@ -130,7 +129,9 @@ function DesktopDropdown({
 export default function SiteHeader() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname();
+  const isActive = (p: string) => pathname === p || pathname.startsWith(p + "/");
 
+  const inicioActive = (pathname === "/");
   const tiendasActive = pathname?.startsWith("/tiendas");
   const oroActive = pathname?.startsWith("/oro");
   const plataActive = pathname?.startsWith("/plata");
@@ -138,6 +139,24 @@ export default function SiteHeader() {
   // const utilsActive = pathname?.startsWith("/utilidades");
   const aboutActive = pathname?.startsWith("/sobre-nosotros");
   const contActive = pathname?.startsWith("/contacto");
+
+  // 🔒: bloquea scroll cuando está abierto
+  useEffect(() => {
+    if (mobileOpen) {
+      const prev = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => { document.body.style.overflow = prev; };
+    }
+  }, [mobileOpen]);
+  // 🔁: cierra al cambiar de ruta
+  useEffect(() => { setMobileOpen(false); }, [pathname]);
+
+  // ⎋: cierra con Escape
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setMobileOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   return (
     <header className="sticky top-0 z-50 bg-white/80 backdrop-blur">
@@ -151,12 +170,12 @@ export default function SiteHeader() {
           {/* Punto dorado (ajuste óptico) */}
           <span
             aria-hidden
-            className="hidden md:inline-block h-2 w-2 rounded-full md:translate-y-[1px]"
+            className="inline-block h-1.5 w-1.5 md:h-2 md:w-2 rounded-full relative top-[2px] md:translate-y-[1px]"
             style={{ backgroundColor: "hsl(var(--brand))" }}
           />
 
           {/* Slogan */}
-          <span className="hidden md:inline text-sm text-zinc-600 leading-none md:translate-y-[1px]">
+          <span className="hidden md:inline text-sm text-zinc-600 leading-none md:translate-y-[2px]">
             Tu guía en metales preciosos
           </span>
 
@@ -165,6 +184,13 @@ export default function SiteHeader() {
 
         {/* DESKTOP */}
         <nav className="hidden md:flex items-center gap-4 text-sm text-zinc-700">
+          <Link
+            href="/"
+            className={["px-2 py-1 link-brand-underline", inicioActive ? "is-active" : ""].join(" ")}
+          >
+            Inicio
+          </Link>
+
           <Link
             href="/tiendas"
             className={[
@@ -242,9 +268,10 @@ export default function SiteHeader() {
         {/* BOTÓN MÓVIL */}
         <button
           className="md:hidden inline-flex items-center gap-2 rounded px-2 py-1 hover:bg-zinc-100"
-          onClick={() => setMobileOpen((v) => !v)}
+          onClick={() => setMobileOpen(v => !v)}
           aria-expanded={mobileOpen}
           aria-controls="mobile-nav"
+          aria-label="Abrir menú"
         >
           <span className="text-sm">Menú</span>
           <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden>
@@ -261,136 +288,200 @@ export default function SiteHeader() {
 
       {/* MÓVIL */}
       {mobileOpen && (
-        <div id="mobile-nav" className="md:hidden border-t bg-white shadow-sm">
-          <nav className="mx-auto max-w-6xl px-4 py-4 grid gap-5 text-sm">
-            {/* Tiendas */}
-            <div>
+        <>
+          {/* Overlay */}
+          <div
+            className="fixed inset-0 z-40 bg-black/30"
+            onClick={() => setMobileOpen(false)}
+            aria-hidden
+          />
+
+          {/* Sheet */}
+          <div
+            id="mobile-nav"
+            className="fixed inset-x-0 top-0 z-50 origin-top animate-in fade-in slide-in-from-top duration-150
+                      bg-white shadow-lg md:hidden"
+            role="dialog"
+            aria-modal="true"
+          >
+            {/* Header del sheet */}
+            <div className="flex items-center justify-between px-4 py-3 border-b">
+              <span className="text-base font-medium">Menú</span>
+              <button
+                onClick={() => setMobileOpen(false)}
+                className="rounded p-2 hover:bg-zinc-100"
+                aria-label="Cerrar menú"
+              >
+                <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden>
+                  <path fill="currentColor" d="M18.3 5.7 12 12l6.3 6.3-1.4 1.4L10.6 13.4 4.3 19.7 2.9 18.3 9.2 12 2.9 5.7 4.3 4.3 10.6 10.6 16.9 4.3z" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Contenido */}
+            <nav className="max-h-[80vh] overflow-y-auto px-4 py-4 grid gap-5 text-sm">
+              {/* Inicio */}
+              <Link
+                href="/"
+                onClick={() => setMobileOpen(false)}
+                className={[
+                  "block rounded-lg px-3 py-2",
+                  isActive("/") ? "bg-[hsl(var(--brand)/0.10)] text-[hsl(var(--brand))] font-medium" : "hover:bg-zinc-50"
+                ].join(" ")}
+              >
+                Inicio
+              </Link>
+
+              {/* Tiendas */}
               <Link
                 href="/tiendas"
                 onClick={() => setMobileOpen(false)}
-                className="block font-medium mb-2 underline underline-offset-2"
+                className={[
+                  "block rounded-lg px-3 py-2",
+                  isActive("/tiendas") ? "bg-[hsl(var(--brand)/0.10)] text-[hsl(var(--brand))] font-medium" : "hover:bg-zinc-50"
+                ].join(" ")}
               >
                 Tiendas
               </Link>
-            </div>
 
-            {/* Oro */}
-            <div>
-              <Link
-                href="/oro"
-                onClick={() => setMobileOpen(false)}
-                className="block font-medium mb-2 underline underline-offset-2"
-              >
-                Oro
-              </Link>
-              <div className="flex gap-2">
+              {/* Oro (acordeón) */}
+              <MobileAccordion
+                label="Oro"
+                baseHref="/oro"
+                openByDefault={pathname.startsWith("/oro")}
+                items={[
+                  { href: "/oro/lingotes", label: "Lingotes de oro" },
+                  { href: "/oro/monedas",  label: "Monedas de oro" },
+                ]}
+                isActive={isActive}
+                onNavigate={() => setMobileOpen(false)}
+              />
+
+              {/* Plata (acordeón) */}
+              <MobileAccordion
+                label="Plata"
+                baseHref="/plata"
+                openByDefault={pathname.startsWith("/plata")}
+                items={[
+                  { href: "/plata/lingotes", label: "Lingotes de plata" },
+                  { href: "/plata/monedas",  label: "Monedas de plata" },
+                ]}
+                isActive={isActive}
+                onNavigate={() => setMobileOpen(false)}
+              />
+
+              <div className="h-px bg-zinc-200 my-1" />
+
+              {/* Secundario */}
+              <div className="grid gap-2">
                 <Link
-                  href="/oro/lingotes"
+                  href="/sobre-nosotros"
                   onClick={() => setMobileOpen(false)}
-                  className="px-2 py-1 rounded bg-zinc-50 hover:bg-zinc-100"
+                  className={[
+                    "block rounded-lg px-3 py-2",
+                    isActive("/sobre-nosotros") ? "bg-[hsl(var(--brand)/0.10)] text-[hsl(var(--brand))] font-medium" : "hover:bg-zinc-50"
+                  ].join(" ")}
                 >
-                  Lingotes
+                  Sobre nosotros
                 </Link>
                 <Link
-                  href="/oro/monedas"
+                  href="/contacto"
                   onClick={() => setMobileOpen(false)}
-                  className="px-2 py-1 rounded bg-zinc-50 hover:bg-zinc-100"
+                  className={[
+                    "block rounded-lg px-3 py-2",
+                    isActive("/contacto") ? "bg-[hsl(var(--brand)/0.10)] text-[hsl(var(--brand))] font-medium" : "hover:bg-zinc-50"
+                  ].join(" ")}
                 >
-                  Monedas
+                  Contacto
                 </Link>
               </div>
-            </div>
 
-            {/* Plata */}
-            <div>
-              <Link
-                href="/plata"
-                onClick={() => setMobileOpen(false)}
-                className="block font-medium mb-2 underline underline-offset-2"
-              >
-                Plata
-              </Link>
-              <div className="flex gap-2">
-                <Link
-                  href="/plata/lingotes"
-                  onClick={() => setMobileOpen(false)}
-                  className="px-2 py-1 rounded bg-zinc-50 hover:bg-zinc-100"
-                >
-                  Lingotes
-                </Link>
-                <Link
-                  href="/plata/monedas"
-                  onClick={() => setMobileOpen(false)}
-                  className="px-2 py-1 rounded bg-zinc-50 hover:bg-zinc-100"
-                >
-                  Monedas
-                </Link>
-              </div>
-            </div>
-
-            {/* Utilidades */}
-            <div>
-              <Link
-                href="/utilidades"
-                onClick={() => setMobileOpen(false)}
-                className="block font-medium mb-2 underline underline-offset-2"
-              >
-                Utilidades
-              </Link>
-              <div className="flex flex-wrap gap-2">
-                <Link href="/utilidades/valorar-oro" onClick={() => setMobileOpen(false)} className="px-2 py-1 rounded bg-zinc-50 hover:bg-zinc-100">
-                  Valorar oro
-                </Link>
-                <Link href="/utilidades/calculadora-inversion" onClick={() => setMobileOpen(false)} className="px-2 py-1 rounded bg-zinc-50 hover:bg-zinc-100">
-                  Calculadora de inversión
-                </Link>
-                <Link href="/utilidades/conversor" onClick={() => setMobileOpen(false)} className="px-2 py-1 rounded bg-zinc-50 hover:bg-zinc-100">
-                  Conversor
-                </Link>
-              </div>
-            </div>
-
-            {/* Aprender */}
-            <div>
-              <Link
-                href="/guias"
-                onClick={() => setMobileOpen(false)}
-                className="block font-medium mb-2 underline underline-offset-2"
-              >
-                Aprender
-              </Link>
-              <div className="flex gap-2">
-                <Link
-                  href="/guias"
-                  onClick={() => setMobileOpen(false)}
-                  className="px-2 py-1 rounded bg-zinc-50 hover:bg-zinc-100"
-                >
-                  Guías
-                </Link>
-                <Link
-                  href="/blog"
-                  onClick={() => setMobileOpen(false)}
-                  className="px-2 py-1 rounded bg-zinc-50 hover:bg-zinc-100"
-                >
-                  Blog
-                </Link>
-              </div>
-            </div>
-
-            <div className="h-px bg-zinc-200 my-2" />
-
-            {/* Secundario */}
-            <div className="flex items-center gap-4">
-              <Link href="/sobre-nosotros" onClick={() => setMobileOpen(false)} className="hover:underline">
-                Sobre nosotros
-              </Link>
-              <Link href="/contacto" onClick={() => setMobileOpen(false)} className="hover:underline">
-                Contacto
-              </Link>
-            </div>
-          </nav>
-        </div>
+              {/* (Opcional) Utilidades y Aprender: descomenta si las usas */}
+              {/*
+              <div className="h-px bg-zinc-200 my-1" />
+              <Link ...>Utilidades</Link>
+              <Link ...>Aprender</Link>
+              */}
+            </nav>
+          </div>
+        </>
       )}
     </header>
+  );
+}
+
+function MobileAccordion({
+  label,
+  baseHref,
+  items,
+  openByDefault,
+  isActive,
+  onNavigate,
+}: {
+  label: string;
+  baseHref: string;
+  items: { href: string; label: string }[];
+  openByDefault?: boolean;
+  isActive: (p: string) => boolean;
+  onNavigate: () => void;
+}) {
+  const [open, setOpen] = useState(!!openByDefault);
+  const toggle = () => setOpen(o => !o);
+
+  const anyChildActive = items.some(it => isActive(it.href)) || isActive(baseHref);
+
+  return (
+    <div>
+      <div className="flex items-center justify-between">
+        <Link
+          href={baseHref}
+          onClick={onNavigate}
+          className={[
+            "block rounded-lg px-3 py-2",
+            anyChildActive ? "bg-[hsl(var(--brand)/0.10)] text-[hsl(var(--brand))] font-medium" : "hover:bg-zinc-50"
+          ].join(" ")}
+        >
+          {label}
+        </Link>
+        <button
+          onClick={toggle}
+          className="rounded p-2 hover:bg-zinc-100"
+          aria-expanded={open}
+          aria-controls={`acc-${label}`}
+          aria-label={`Desplegar ${label}`}
+        >
+          <svg className="h-4 w-4 transition-transform" style={{ transform: open ? "rotate(180deg)" : "none" }} viewBox="0 0 24 24" aria-hidden>
+            <path fill="currentColor" d="M7 10l5 5 5-5H7z" />
+          </svg>
+        </button>
+      </div>
+      <div
+        id={`acc-${label}`}
+        className={[
+          "grid overflow-hidden transition-[grid-template-rows,opacity] duration-150 ease-out",
+          open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+        ].join(" ")}
+      >
+        <div className="min-h-0">
+          <div className="flex flex-wrap gap-2 px-3 pb-2 pt-1">
+            {items.map(it => (
+              <Link
+                key={it.href}
+                href={it.href}
+                onClick={onNavigate}
+                className={[
+                  "px-3 py-1.5 rounded-lg text-sm",
+                  isActive(it.href)
+                    ? "bg-[hsl(var(--brand)/0.12)] text-[hsl(var(--brand))] font-medium"
+                    : "bg-zinc-50 hover:bg-zinc-100 text-zinc-800"
+                ].join(" ")}
+              >
+                {it.label}
+              </Link>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

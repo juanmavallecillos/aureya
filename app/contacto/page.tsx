@@ -36,7 +36,7 @@ export default function ContactPage() {
       {/* Bloque SEO */}
       <section
         className="mt-4 rounded-lg pl-4 pr-3 py-3"
-        style={{ borderLeft: "4px solid hsl(var(--brand))", background: "hsl(var(--brand) / 0.05)" }}
+        style={{ borderLeft: "4px solid hsl(var(--brand))", background: "hsl(var(--brand) / 0.035)" }}
       >
         <h2 className="text-lg md:text-xl font-semibold text-zinc-900">Escríbenos</h2>
         <p className="mt-1 text-sm text-zinc-700">
@@ -47,7 +47,7 @@ export default function ContactPage() {
       {/* Grid dos columnas */}
       <section className="mt-6 grid gap-6 md:grid-cols-[1fr_340px] items-start">
         {/* Card Form bonita */}
-        <div className="relative overflow-hidden rounded-2xl border bg-white shadow-[0_12px_30px_rgba(0,0,0,0.06)]">
+        <div className="relative overflow-hidden rounded-2xl bg-white ring-1 ring-inset ring-zinc-200 shadow-sm transition-shadow hover:shadow-md">
           <div className="absolute inset-x-0 top-0 h-1 bg-[hsl(var(--brand)/0.9)]" />
           <div className="px-5 pt-4">
             <div className="flex items-center gap-2">
@@ -64,7 +64,7 @@ export default function ContactPage() {
         </div>
 
         {/* Card Otras vías con iconos */}
-        <aside className="relative overflow-hidden rounded-2xl border bg-white shadow-[0_12px_30px_rgba(0,0,0,0.06)]">
+        <aside className="relative overflow-hidden rounded-2xl bg-white ring-1 ring-inset ring-zinc-200 shadow-sm transition-shadow hover:shadow-md">
           <div className="absolute inset-x-0 top-0 h-1 bg-[hsl(var(--brand)/0.9)]" />
           <div className="p-5">
             <div className="flex items-center gap-2">
