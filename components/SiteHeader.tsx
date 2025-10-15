@@ -131,7 +131,7 @@ export default function SiteHeader() {
   const pathname = usePathname();
   const isActive = (p: string) => pathname === p || pathname.startsWith(p + "/");
 
-  const inicioActive = (pathname === "/");
+  const inicioActive = (pathname === "/" || pathname === "");
   const tiendasActive = pathname?.startsWith("/tiendas");
   const oroActive = pathname?.startsWith("/oro");
   const plataActive = pathname?.startsWith("/plata");

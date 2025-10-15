@@ -5,9 +5,14 @@ import type { Metadata } from "next";
 import PriceChart from "@/components/PriceChart";
 import VerifiedBadge from "@/components/VerifiedBadge";
 import ProductGallery from "@/components/ProductGallery";
-import { fetchJsonServer as fetchJson,
-        fetchJsonOrNullServer as fetchJsonOrnull, cdnPath } from "@/lib/cdn-server";
+import {
+  fetchJsonServer as fetchJson,
+  fetchJsonOrNullServer as fetchJsonOrnull,
+  cdnPath,
+} from "@/lib/cdn-server";
 import { productSlug, extractSkuFromSlugParam } from "@/lib/slug";
+import SkuOffersTable from "@/components/SkuOffersTable";
+import InfoBarSpot from "@/components/table/InfoBarSpot";
 
 export const revalidate = 60;
 
@@ -87,14 +92,6 @@ function titleName(meta?: SkuDoc["meta"]) {
   return `${form} de ${metal}${brandOrSeries ? ` ${brandOrSeries}` : ""}`;
 }
 
-function premiumClass(pct: unknown) {
-  const v = Number(pct);
-  if (!Number.isFinite(v)) return "text-zinc-700";
-  if (v <= 5) return "text-emerald-600";
-  if (v <= 10) return "text-amber-600";
-  return "text-rose-600";
-}
-
 /* ---------- Título legible ---------- */
 function displayName(meta?: SkuDoc["meta"]) {
   if (!meta) return "";
@@ -130,7 +127,6 @@ function Chip({ children }: { children: React.ReactNode }) {
 }
 
 /* ---------- Helpers media ---------- */
-// Agrupa variantes -600/-1200 por base y devuelve la mejor disponible (prefiere 1200)
 function selectPreferredImages(paths: string[]) {
   const map = new Map<string, { w600?: string; w1200?: string }>();
   for (const p of paths) {
@@ -143,14 +139,14 @@ function selectPreferredImages(paths: string[]) {
     if (size === "1200") prev.w1200 = p;
     map.set(base, prev);
   }
-  // Ordena intentando poner front antes que back
   const entries = Array.from(map.entries()).sort(([a], [b]) => {
-    const pa = a.toLowerCase(), pb = b.toLowerCase();
-    const af = pa.includes("front") ? -1 : pa.includes("anverso") ? -1 : 0;
-    const bf = pb.includes("front") ? -1 : pb.includes("anverso") ? -1 : 0;
+    const pa = a.toLowerCase(),
+      pb = b.toLowerCase();
+    const af = pa.includes("front") || pa.includes("anverso") ? -1 : 0;
+    const bf = pb.includes("front") || pb.includes("anverso") ? -1 : 0;
     if (af !== bf) return af - bf;
-    const ab = pa.includes("back") ? 1 : pa.includes("reverso") ? 1 : 0;
-    const bb = pb.includes("back") ? 1 : pb.includes("reverso") ? 1 : 0;
+    const ab = pa.includes("back") || pa.includes("reverso") ? 1 : 0;
+    const bb = pb.includes("back") || pb.includes("reverso") ? 1 : 0;
     if (ab !== bb) return ab - bb;
     return pa.localeCompare(pb);
   });
@@ -235,15 +231,13 @@ export default async function ProductPage(
   const getDealerLabel = (id: string) => dealers?.[id]?.label || id;
   const isDealerVerified = (id: string) => !!dealers?.[id]?.verified;
 
-  // 5) Ofertas ordenadas
+  // 5) Ofertas (sin ordenar aquí; la tabla se encarga de ordenar)
   const offers = Array.isArray(data?.offers)
-    ? [...data.offers].filter((o) => o?.total_eur != null).sort((a, b) => Number(a.total_eur) - Number(b.total_eur))
+    ? data.offers.filter((o) => o?.total_eur != null)
     : [];
-  const best = offers[0] || null;
+  const best = [...offers].sort((a, b) => Number(a.total_eur) - Number(b.total_eur))[0] || null;
 
   // 6) Derivados
-  const name = displayName(data.meta);
-  const weight = Math.max(1, Math.round(Number(data.meta.weight_g || 0)));
   const bucket = bucketFromWeight(data.meta.weight_g);
   const spotPerG = data.spot?.eur_per_g ?? null;
   const spotPerOz = spotPerG != null ? spotPerG * OZ_TO_G : null;
@@ -253,23 +247,36 @@ export default async function ProductPage(
     ? updatedAt.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })
     : "—";
 
-  /* 7) GALERÍA: usar /api/cdn y URLs ya resueltas */
+  // 👉 Normalizamos metal para InfoBarSpot
+  const metalToken = (() => {
+    const x = (data.meta.metal || "").toLowerCase();
+    if (x === "oro" || x === "gold") return "gold";
+    if (x === "plata" || x === "silver") return "silver";
+    return x;
+  })();
+
+  // Props para InfoBarSpot (solo se rellena el metal del SKU)
+  const spotLoading = false;
+  const goldEurPerG = metalToken === "gold" ? spotPerG : null;
+  const silverEurPerG = metalToken === "silver" ? spotPerG : null;
+  const goldEurPerOz = metalToken === "gold" ? spotPerOz : null;
+  const silverEurPerOz = metalToken === "silver" ? spotPerOz : null;
+  const effectiveUpdatedAt = data.spot?.updated_at || data.updated_at || null;
+
+  /* 7) GALERÍA */
   const mediaIdx = await fetchJson<MediaIndex>("media/index.json", { revalidate: 300 }).catch(
     () => ({} as MediaIndex)
-  ); // ✅ quita la barra inicial; fetchJson hace /api/cdn?path=...
+  );
   const rawPaths = Array.isArray(mediaIdx?.[data.sku]) ? mediaIdx[data.sku] : [];
   const preferred = selectPreferredImages(rawPaths);
-  // ✅ pasa las rutas por cdnPath para que ProductGallery reciba URLs completas al proxy
   const galleryImages: string[] = preferred.slice(0, 4).map((p) => cdnPath(p));
-
-  // Para JSON-LD: si hay galería, úsala directamente; si no, fallback legacy
   const jsonImages = galleryImages.length
     ? galleryImages
     : (data.images && data.images.length ? data.images : data.image ? [data.image] : []);
 
   return (
     <main className="mx-auto max-w-6xl px-4 pb-16">
-      {/* ENCABEZADO: título + chips + actualizado */}
+      {/* ENCABEZADO */}
       <section className="pt-6">
         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
           <div>
@@ -277,7 +284,6 @@ export default async function ProductPage(
               {titleName(data.meta)} · {weightLabel(data.meta.weight_g)}
             </h1>
 
-            {/* Chips de contexto */}
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <Chip>{niceMetal(data.meta.metal)}</Chip>
               <Chip>{niceForm(data.meta.form)}</Chip>
@@ -290,11 +296,10 @@ export default async function ProductPage(
           </div>
         </div>
 
-        {/* Hairline dorado sutil */}
         <div className="mt-4 h-px w-full bg-gradient-to-r from-transparent via-[hsl(var(--brand))] to-transparent" />
       </section>
 
-      {/* SEO full-width */}
+      {/* BLOQUE SEO */}
       <section
         className="mt-4 rounded-lg pl-4 pr-3 py-3"
         style={{ borderLeft: "4px solid hsl(var(--brand))", background: "hsl(var(--brand) / 0.05)" }}
@@ -303,27 +308,15 @@ export default async function ProductPage(
           Mejor precio y prima frente al <em>spot</em>
         </h2>
         <p className="mt-1 text-sm text-zinc-700">
-          Esta ficha muestra <strong>mejor oferta</strong>, histórico diario y todas las ofertas
-          disponibles para este SKU en tiendas verificadas. Calculamos la <strong>prima</strong> sobre
-          el valor intrínseco (€/g y €/oz) para comparar de forma homogénea.
+          Esta ficha muestra <strong>mejor oferta</strong>, histórico diario y todas las ofertas disponibles para este SKU en tiendas verificadas.
+          Calculamos la <strong>prima</strong> sobre el valor intrínseco (€/g y €/oz) para comparar de forma homogénea.
         </p>
       </section>
 
-      {/* GRID compacto: izquierda (Spot + Mejor oferta) / derecha (Galería) */}
+      {/* GRID: izquierda (Mejor oferta + Histórico) / derecha (Galería) */}
       <section className="mt-4 grid gap-6 md:grid-cols-[1fr_360px] items-start">
-        {/* Izquierda: Spot + Mejor oferta + Histórico */}
+        {/* Izquierda */}
         <div className="space-y-6">
-          {/* Info bar: spot */}
-          <div className="relative overflow-hidden rounded-2xl border border-zinc-200/70 bg-white shadow-[0_12px_30px_rgba(0,0,0,0.06)]">
-            <div className="absolute inset-x-0 top-0 h-1 bg-[hsl(var(--brand)/0.9)]" />
-            <div className="px-4 py-3 text-xs text-zinc-700 flex flex-wrap items-center gap-x-6 gap-y-1">
-              <span className="font-semibold text-zinc-900">Spot</span>
-              <span>€/g: <strong>{spotPerG != null ? fmtMoney(spotPerG) : "—"}</strong></span>
-              <span>€/oz: <strong>{spotPerOz != null ? fmtMoney(spotPerOz) : "—"}</strong></span>
-              <span className="opacity-70">Fuente: meta del SKU</span>
-            </div>
-          </div>
-
           {/* Mejor oferta */}
           <div className="relative overflow-hidden rounded-2xl border border-zinc-200/70 bg-white shadow-[0_12px_30px_rgba(0,0,0,0.06)]">
             <div className="absolute inset-x-0 top-0 h-1 bg-[hsl(var(--brand)/0.9)]" />
@@ -398,6 +391,7 @@ export default async function ProductPage(
             )}
           </div>
 
+          {/* Histórico */}
           <div className="relative overflow-hidden rounded-2xl border border-zinc-200/70 bg-white shadow-[0_12px_30px_rgba(0,0,0,0.06)]">
             <div className="absolute inset-x-0 top-0 h-1 bg-[hsl(var(--brand)/0.9)]" />
             <div className="p-3 md:p-4">
@@ -414,7 +408,7 @@ export default async function ProductPage(
               <div className="absolute inset-x-0 top-0 h-1 bg-[hsl(var(--brand)/0.9)]" />
               <ProductGallery
                 images={galleryImages}
-                altBase={name || data.sku}
+                altBase={displayName(data.meta) || data.sku}
                 className="max-w-[360px] mx-auto"
               />
             </div>
@@ -422,104 +416,27 @@ export default async function ProductPage(
         </div>
       </section>
 
-      {/* Tabla de ofertas */}
+            {/* Tabla de ofertas */}
       <section className="mt-8">
         <h2 className="text-lg font-semibold">Todas las ofertas para este SKU</h2>
         <p className="text-sm text-zinc-600 mt-1">
           Ordenadas por <em>total</em> (precio + envío). La primera fila coincide con la mejor oferta.
         </p>
 
-        <div className="mt-3 overflow-x-auto rounded-2xl border border-zinc-200/70 bg-white">
-          <table className="min-w-[860px] w-full text-sm border-separate border-spacing-y-2">
-            <thead className="sticky top-0 z-10 bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/60">
-              <tr>
-                <th className="th text-left w-52 px-4 py-2.5 bg-zinc-50/60 text-[13px] font-semibold text-zinc-700">Tienda</th>
-                <th className="th text-right w-28 px-4 py-2.5 bg-zinc-50/60 text-[13px] font-semibold text-zinc-700">Precio</th>
-                <th className="th text-right w-28 px-4 py-2.5 bg-zinc-50/60 text-[13px] font-semibold text-zinc-700">Envío</th>
-                <th className="th text-right w-32 px-4 py-2.5 bg-zinc-50/60 text-[13px] font-semibold text-zinc-700">Total</th>
-                <th className="th text-right w-32 px-4 py-2.5 bg-zinc-50/60 text-[13px] font-semibold text-zinc-700">Prima</th>
-                <th className="th text-center w-28 px-4 py-2.5 bg-zinc-50/60 text-[13px] font-semibold text-zinc-700">Stock</th>
-                <th className="th text-right w-40 px-4 py-2.5 bg-zinc-50/60 text-[13px] font-semibold text-zinc-700">Comprar</th>
-              </tr>
-            </thead>
+        {/* 🧩 Bloque único: Spot + Tabla (como en la landing, sin buscador) */}
+        <div className="mt-3">
+          
 
-            <tbody>
-              {offers.map((o, idx) => {
-                const dealerLabel = getDealerLabel(o.dealer_id);
-                const verified = isDealerVerified(o.dealer_id);
-                const rowKey = `${o.dealer_id}|${o.buy_url ?? ''}|${o.total_eur ?? ''}|${o.scraped_at ?? ''}|${idx}`;
-
-                return (
-                  <tr
-                    key={rowKey}
-                    className={[
-                      "bg-white",
-                      idx === 0 ? "bg-[hsl(var(--brand)/0.06)]" : "",
-                      // estilo “card row”
-                      "rounded-xl border border-zinc-200/70 shadow-[0_2px_8px_rgba(0,0,0,0.03)]",
-                      "hover:bg-white hover:shadow-[0_4px_14px_rgba(0,0,0,0.05)] transition"
-                    ].join(" ")}
-                  >
-                    <td className="td px-4 py-2.5 first:rounded-l-xl">
-                      <div className="inline-flex items-center gap-1.5">
-                        <span className="font-medium text-zinc-900">{dealerLabel}</span>
-                        {verified ? <VerifiedBadge size={16} className="translate-y-[1px]" /> : null}
-                      </div>
-                    </td>
-
-                    <td className="td text-right tabular-nums px-4 py-2.5">{fmtMoney(o.price_eur)}</td>
-                    <td className="td text-right tabular-nums px-4 py-2.5">{fmtMoney(o.shipping_eur)}</td>
-
-                    <td className="td text-right tabular-nums px-4 py-2.5 font-semibold text-zinc-900">
-                      {fmtMoney(o.total_eur)}
-                    </td>
-
-                    <td className={`td text-right tabular-nums px-4 py-2.5 ${premiumClass(o.premium_pct)}`}>
-                      {fmtPct(o.premium_pct)}
-                    </td>
-
-                    <td className="td text-center px-4 py-2.5">{o.stock ?? "—"}</td>
-
-                    <td className="td text-right px-4 py-2.5 last:rounded-r-xl">
-                      {o.buy_url ? (
-                        <a
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium btn-brand"
-                          href={o.buy_url}
-                          aria-label="Comprar"
-                          title={`Comprar en ${dealerLabel}`}
-                        >
-                          <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden>
-                            <path fill="currentColor" d="M14 3h7v7h-2V6.41l-9.29 9.3-1.42-1.42 9.3-9.29H14V3ZM5 5h6v2H7v10h10v-4h2v6H5V5Z"/>
-                          </svg>
-                          Comprar
-                        </a>
-                      ) : (
-                        <span className="text-zinc-400">—</span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-
-              {!offers.length && (
-                <tr>
-                  <td colSpan={7} className="td text-center text-zinc-500 py-8">
-                    No hay ofertas disponibles para este SKU.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-
-          <div className="px-3 py-2 text-xs text-zinc-600">
-            Nota: la prima se muestra sin envío. El coste de envío exacto se confirma en la tienda.
-          </div>
-        </div>
+          {/* La tabla se renderiza “desnuda” dentro del mismo card */}
+            <SkuOffersTable
+              offers={offers}
+              dealers={dealers}
+              pageSizeDefault={10}
+            />
+            </div>
       </section>
 
-      {/* JSON-LD (incluye imágenes si existen) */}
+      {/* JSON-LD */}
       {(() => {
         const base = (process.env.NEXT_PUBLIC_SITE_URL || "").replace(/\/+$/, "");
         const productUrl = base ? `${base}/producto/${canonicalSlug}` : undefined;
@@ -533,7 +450,12 @@ export default async function ProductPage(
           url: productUrl,
           ...(jsonImages && jsonImages.length ? { image: jsonImages } : {}),
           offers: offers.length
-            ? { "@type": "AggregateOffer", priceCurrency: "EUR", lowPrice: Number(offers[0]?.total_eur ?? 0).toFixed(2), offerCount: offers.length }
+            ? {
+                "@type": "AggregateOffer",
+                priceCurrency: "EUR",
+                lowPrice: Number(offers[0]?.total_eur ?? 0).toFixed(2),
+                offerCount: offers.length,
+              }
             : undefined,
         };
         return (
