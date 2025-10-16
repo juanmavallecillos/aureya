@@ -4,23 +4,30 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 
-/* --- Dropdown controlado por estado (desktop) --- */
-function DesktopDropdown({
+/* =========================
+   NUEVO: Mega dropdown “Metales” (2 columnas: Oro / Plata)
+   ========================= */
+type MenuGroup = {
+  label: string; // "Oro" | "Plata" (escala a platino, etc.)
+  baseHref: string; // "/oro" | "/plata"
+  items: { href: string; label: string }[];
+};
+
+function DesktopMegaDropdown({
   label,
   href,
-  items,
+  groups,
   active,
 }: {
   label: string;
   href: string;
-  items: { href: string; label: string }[];
+  groups: MenuGroup[];
   active?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   useEffect(() => setOpen(false), [pathname]);
 
-  // Cierre por blur con pequeño delay para permitir pasar el foco al panel
   let blurTimer: any;
   const onBlur = () => {
     blurTimer = setTimeout(() => setOpen(false), 80);
@@ -46,7 +53,7 @@ function DesktopDropdown({
         onBlur={onBlur}
         className={[
           "inline-flex items-center gap-1 px-2 py-1 link-brand-underline border-b-2 border-transparent transition-colors",
-          active ? "is-active" : ""
+          active ? "is-active" : "",
         ].join(" ")}
       >
         <span>{label}</span>
@@ -60,22 +67,22 @@ function DesktopDropdown({
         </svg>
       </Link>
 
-      {/* HITBOX puente (evita cierre al cruzar del trigger al panel) */}
+      {/* Hitbox puente */}
       <div
         aria-hidden
         className={["absolute left-0 right-0 top-full", open ? "block" : "hidden"].join(" ")}
         style={{ height: 8 }}
       />
 
-      {/* Panel (sin barra dorada superior) */}
+      {/* Panel mega */}
       <div
         aria-hidden={!open}
         role="menu"
         onFocus={onFocus}
         onBlur={onBlur}
         className={[
-          "absolute left-0 top-full z-50 min-w-[240px]",
-          "mt-0 -translate-y-px",                             // pegado al trigger
+          "absolute left-0 top-full z-50 w-[520px] max-w-[min(90vw,640px)]",
+          "mt-0 -translate-y-px",
           "rounded-2xl border border-zinc-200/80 bg-white/95 backdrop-blur-md",
           "shadow-[0_10px_30px_rgba(0,0,0,0.08)] ring-1 ring-black/5",
           "transition-all duration-150 ease-out origin-top",
@@ -84,79 +91,219 @@ function DesktopDropdown({
             : "opacity-0 translate-y-1 scale-95 pointer-events-none",
         ].join(" ")}
       >
-        <ul className="p-2">
-          {items.map((it, i) => (
-            <li key={it.href}>
+        <div className="grid grid-cols-2 gap-2 p-3">
+          {groups.map((g) => (
+            <div key={g.baseHref} className="rounded-xl p-2">
+              {/* Cabecera de grupo (clicable al índice del metal) */}
               <Link
-                href={it.href}
+                href={g.baseHref}
                 onClick={() => setOpen(false)}
-                role="menuitem"
-                className={[
-                  "group relative flex items-center rounded-xl px-3 py-2",
-                  "text-sm text-zinc-700 font-normal",                 // tamaño y peso base más suaves
-                  "hover:bg-zinc-50 hover:text-zinc-900",
-                  "transition-colors",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--brand)/0.35)]",
-                ].join(" ")}
+                className="inline-flex items-center gap-2 px-2 py-1.5 rounded-lg text-[15px] font-medium hover:bg-zinc-50 text-zinc-900"
               >
-                {/* Acento dorado a la izquierda (sólo en hover/focus) */}
-                <span
-                  aria-hidden
-                  className="absolute left-2 h-5 w-[2px] rounded-full bg-[hsl(var(--brand))]
-                             opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition"
-                />
-                <span className="pl-3 leading-none font-normal
-                                group-hover:font-medium group-focus-visible:font-medium">
-                  {it.label}
-                </span>
+                <span>{g.label}</span>
+                <svg className="h-4 w-4 opacity-60" viewBox="0 0 24 24" aria-hidden>
+                  <path fill="currentColor" d="M10 6l6 6-6 6-1.4-1.4L12.2 12 8.6 7.4 10 6z" />
+                </svg>
               </Link>
 
-              {/* Separador suave entre ítems (no después del último) */}
-              {i < items.length - 1 && (
-                <div
-                  className="mx-2 my-1 h-px bg-gradient-to-r from-transparent via-zinc-100 to-transparent"
-                  aria-hidden
-                />
-              )}
-            </li>
+              {/* Items */}
+              <ul className="mt-1 space-y-1">
+                {g.items.map((it) => (
+                  <li key={it.href}>
+                    <Link
+                      href={it.href}
+                      onClick={() => setOpen(false)}
+                      className={[
+                        "group flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm",
+                        "text-zinc-700 hover:text-zinc-900 hover:bg-zinc-50 transition-colors",
+                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--brand)/0.35)]",
+                      ].join(" ")}
+                    >
+                      <span
+                        aria-hidden
+                        className="h-1.5 w-1.5 rounded-full bg-[hsl(var(--brand))] opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition"
+                      />
+                      <span>{it.label}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
           ))}
-        </ul>
+        </div>
       </div>
     </div>
   );
 }
 
+/* =========================
+   NUEVO: Acordeón móvil agrupado para “Metales”
+   ========================= */
+function MobileAccordionGroup({
+  label,
+  groups,
+  openByDefault,
+  isActive,
+  onNavigate,
+}: {
+  label: string;
+  groups: MenuGroup[];
+  openByDefault?: boolean;
+  isActive: (p: string) => boolean;
+  onNavigate: () => void;
+}) {
+  const [open, setOpen] = useState(!!openByDefault);
+  const toggle = () => setOpen((o) => !o);
+
+  const anyChildActive =
+    groups.some((g) => isActive(g.baseHref) || g.items.some((it) => isActive(it.href)));
+
+  return (
+    <div>
+      <div className="flex items-center justify-between">
+        <button
+          onClick={() => {
+            onNavigate(); // Navega al índice de “Metales” si lo decides más adelante (/metales). Por ahora sólo despliega.
+          }}
+          className={[
+            "block rounded-lg px-3 py-2 text-left",
+            anyChildActive
+              ? "bg-[hsl(var(--brand)/0.10)] text-[hsl(var(--brand))] font-medium"
+              : "hover:bg-zinc-50",
+          ].join(" ")}
+          aria-label={label}
+        >
+          {label}
+        </button>
+        <button
+          onClick={toggle}
+          className="rounded p-2 hover:bg-zinc-100"
+          aria-expanded={open}
+          aria-controls={`acc-${label}`}
+          aria-label={`Desplegar ${label}`}
+        >
+          <svg
+            className="h-4 w-4 transition-transform"
+            style={{ transform: open ? "rotate(180deg)" : "none" }}
+            viewBox="0 0 24 24"
+            aria-hidden
+          >
+            <path fill="currentColor" d="M7 10l5 5 5-5H7z" />
+          </svg>
+        </button>
+      </div>
+
+      <div
+        id={`acc-${label}`}
+        className={[
+          "grid overflow-hidden transition-[grid-template-rows,opacity] duration-150 ease-out",
+          open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0",
+        ].join(" ")}
+      >
+        <div className="min-h-0">
+          <div className="px-3 pb-2 pt-1 space-y-3">
+            {groups.map((g) => (
+              <div key={g.baseHref}>
+                {/* Título de grupo (enlace al índice del metal) */}
+                <Link
+                  href={g.baseHref}
+                  onClick={onNavigate}
+                  className={[
+                    "inline-flex items-center gap-2 rounded-md px-2 py-1.5 text-sm",
+                    isActive(g.baseHref)
+                      ? "bg-[hsl(var(--brand)/0.12)] text-[hsl(var(--brand))] font-medium"
+                      : "bg-zinc-50 hover:bg-zinc-100 text-zinc-800",
+                  ].join(" ")}
+                >
+                  <span className="font-medium">{g.label}</span>
+                  <svg className="h-4 w-4 opacity-60" viewBox="0 0 24 24" aria-hidden>
+                    <path fill="currentColor" d="M10 6l6 6-6 6-1.4-1.4L12.2 12 8.6 7.4 10 6z" />
+                  </svg>
+                </Link>
+
+                {/* Chips de items */}
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {g.items.map((it) => (
+                    <Link
+                      key={it.href}
+                      href={it.href}
+                      onClick={onNavigate}
+                      className={[
+                        "px-3 py-1.5 rounded-lg text-sm",
+                        isActive(it.href)
+                          ? "bg-[hsl(var(--brand)/0.12)] text-[hsl(var(--brand))] font-medium"
+                          : "bg-zinc-50 hover:bg-zinc-100 text-zinc-800",
+                      ].join(" ")}
+                    >
+                      {it.label}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* =========================
+   Header
+   ========================= */
 export default function SiteHeader() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname();
   const isActive = (p: string) => pathname === p || pathname.startsWith(p + "/");
 
-  const inicioActive = (pathname === "/" || pathname === "");
-  const tiendasActive = pathname?.startsWith("/tiendas");
-  const oroActive = pathname?.startsWith("/oro");
-  const plataActive = pathname?.startsWith("/plata");
-  // const aprenderActive = pathname?.startsWith("/guias") || pathname?.startsWith("/blog");
-  // const utilsActive = pathname?.startsWith("/utilidades");
-  const aboutActive = pathname?.startsWith("/sobre-nosotros");
-  const contActive = pathname?.startsWith("/contacto");
+  const inicioActive = isActive("/");
+  const tiendasActive = isActive("/tiendas");
+  const metalesActive = isActive("/oro") || isActive("/plata");
+  const aboutActive = isActive("/sobre-nosotros");
+  const contActive = isActive("/contacto");
 
   // 🔒: bloquea scroll cuando está abierto
   useEffect(() => {
     if (mobileOpen) {
       const prev = document.body.style.overflow;
       document.body.style.overflow = "hidden";
-      return () => { document.body.style.overflow = prev; };
+      return () => {
+        document.body.style.overflow = prev;
+      };
     }
   }, [mobileOpen]);
   // 🔁: cierra al cambiar de ruta
-  useEffect(() => { setMobileOpen(false); }, [pathname]);
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
 
   // ⎋: cierra con Escape
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setMobileOpen(false); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMobileOpen(false);
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+
+  const metalGroups: MenuGroup[] = [
+    {
+      label: "Oro",
+      baseHref: "/oro",
+      items: [
+        { href: "/oro/lingotes", label: "Lingotes de oro" },
+        { href: "/oro/monedas", label: "Monedas de oro" },
+      ],
+    },
+    {
+      label: "Plata",
+      baseHref: "/plata",
+      items: [
+        { href: "/plata/lingotes", label: "Lingotes de plata" },
+        { href: "/plata/monedas", label: "Monedas de plata" },
+      ],
+    },
+  ];
 
   return (
     <header className="sticky top-0 z-50 bg-white/80 backdrop-blur">
@@ -167,7 +314,7 @@ export default function SiteHeader() {
             Aureya
           </span>
 
-          {/* Punto dorado (ajuste óptico) */}
+          {/* Punto dorado */}
           <span
             aria-hidden
             className="inline-block h-1.5 w-1.5 md:h-2 md:w-2 rounded-full relative top-[2px] md:translate-y-[1px]"
@@ -186,80 +333,44 @@ export default function SiteHeader() {
         <nav className="hidden md:flex items-center gap-4 text-sm text-zinc-700">
           <Link
             href="/"
-            className={["px-2 py-1 link-brand-underline", inicioActive ? "is-active" : ""].join(" ")}
+            className={["px-2 py-1 link-brand-underline", inicioActive ? "is-active" : ""].join(
+              " "
+            )}
           >
             Inicio
           </Link>
 
           <Link
             href="/tiendas"
-            className={[
-              "px-2 py-1 link-brand-underline",
-              tiendasActive ? "is-active" : ""
-            ].join(" ")}
+            className={["px-2 py-1 link-brand-underline", tiendasActive ? "is-active" : ""].join(
+              " "
+            )}
           >
             Tiendas
           </Link>
 
-          <DesktopDropdown
-            label="Oro"
-            href="/oro"
-            active={!!oroActive}
-            items={[
-              { href: "/oro/lingotes", label: "Lingotes de oro" },
-              { href: "/oro/monedas", label: "Monedas de oro" },
-            ]}
+          {/* METALES (mega dropdown) */}
+          <DesktopMegaDropdown
+            label="Metales"
+            href="/oro" // o una futura /metales si la creas
+            active={!!metalesActive}
+            groups={metalGroups}
           />
-
-          <DesktopDropdown
-            label="Plata"
-            href="/plata"
-            active={!!plataActive}
-            items={[
-              { href: "/plata/lingotes", label: "Lingotes de plata" },
-              { href: "/plata/monedas", label: "Monedas de plata" },
-            ]}
-          />
-
-          {/* NUEVO: Utilidades (calculadoras) */}
-          {/* <DesktopDropdown
-            label="Utilidades"
-            href="/utilidades"
-            active={!!utilsActive}
-            items={[
-              { href: "/utilidades/valorar-oro", label: "Valorar oro" },
-              { href: "/utilidades/calculadora-inversion", label: "Calculadora de inversión" },
-              { href: "/utilidades/conversor", label: "Conversor g ↔ oz ↔ €/g" },
-            ]}
-          /> */}
-
-          {/* NUEVO: Aprender = Guías + Blog */}
-          {/* <DesktopDropdown
-            label="Aprender"
-            href="/guias"
-            active={!!aprenderActive}
-            items={[
-              { href: "/guias", label: "Guías" },
-              { href: "/blog", label: "Blog" },
-            ]}
-          /> */}
 
           <Link
             href="/sobre-nosotros"
-            className={[
-              "px-2 py-1 link-brand-underline",
-              aboutActive ? "is-active" : ""
-            ].join(" ")}
+            className={["px-2 py-1 link-brand-underline", aboutActive ? "is-active" : ""].join(
+              " "
+            )}
           >
             Sobre nosotros
           </Link>
 
           <Link
             href="/contacto"
-            className={[
-              "px-2 py-1 link-brand-underline",
-              contActive ? "is-active" : ""
-            ].join(" ")}
+            className={["px-2 py-1 link-brand-underline", contActive ? "is-active" : ""].join(
+              " "
+            )}
           >
             Contacto
           </Link>
@@ -268,7 +379,7 @@ export default function SiteHeader() {
         {/* BOTÓN MÓVIL */}
         <button
           className="md:hidden inline-flex items-center gap-2 rounded px-2 py-1 hover:bg-zinc-100"
-          onClick={() => setMobileOpen(v => !v)}
+          onClick={() => setMobileOpen((v) => !v)}
           aria-expanded={mobileOpen}
           aria-controls="mobile-nav"
           aria-label="Abrir menú"
@@ -313,7 +424,10 @@ export default function SiteHeader() {
                 aria-label="Cerrar menú"
               >
                 <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden>
-                  <path fill="currentColor" d="M18.3 5.7 12 12l6.3 6.3-1.4 1.4L10.6 13.4 4.3 19.7 2.9 18.3 9.2 12 2.9 5.7 4.3 4.3 10.6 10.6 16.9 4.3z" />
+                  <path
+                    fill="currentColor"
+                    d="M18.3 5.7 12 12l6.3 6.3-1.4 1.4L10.6 13.4 4.3 19.7 2.9 18.3 9.2 12 2.9 5.7 4.3 4.3 10.6 10.6 16.9 4.3z"
+                  />
                 </svg>
               </button>
             </div>
@@ -326,7 +440,9 @@ export default function SiteHeader() {
                 onClick={() => setMobileOpen(false)}
                 className={[
                   "block rounded-lg px-3 py-2",
-                  isActive("/") ? "bg-[hsl(var(--brand)/0.10)] text-[hsl(var(--brand))] font-medium" : "hover:bg-zinc-50"
+                  isActive("/")
+                    ? "bg-[hsl(var(--brand)/0.10)] text-[hsl(var(--brand))] font-medium"
+                    : "hover:bg-zinc-50",
                 ].join(" ")}
               >
                 Inicio
@@ -338,34 +454,19 @@ export default function SiteHeader() {
                 onClick={() => setMobileOpen(false)}
                 className={[
                   "block rounded-lg px-3 py-2",
-                  isActive("/tiendas") ? "bg-[hsl(var(--brand)/0.10)] text-[hsl(var(--brand))] font-medium" : "hover:bg-zinc-50"
+                  isActive("/tiendas")
+                    ? "bg-[hsl(var(--brand)/0.10)] text-[hsl(var(--brand))] font-medium"
+                    : "hover:bg-zinc-50",
                 ].join(" ")}
               >
                 Tiendas
               </Link>
 
-              {/* Oro (acordeón) */}
-              <MobileAccordion
-                label="Oro"
-                baseHref="/oro"
-                openByDefault={pathname.startsWith("/oro")}
-                items={[
-                  { href: "/oro/lingotes", label: "Lingotes de oro" },
-                  { href: "/oro/monedas",  label: "Monedas de oro" },
-                ]}
-                isActive={isActive}
-                onNavigate={() => setMobileOpen(false)}
-              />
-
-              {/* Plata (acordeón) */}
-              <MobileAccordion
-                label="Plata"
-                baseHref="/plata"
-                openByDefault={pathname.startsWith("/plata")}
-                items={[
-                  { href: "/plata/lingotes", label: "Lingotes de plata" },
-                  { href: "/plata/monedas",  label: "Monedas de plata" },
-                ]}
+              {/* METALES (acordeón agrupado) */}
+              <MobileAccordionGroup
+                label="Metales"
+                groups={metalGroups}
+                openByDefault={pathname.startsWith("/oro") || pathname.startsWith("/plata")}
                 isActive={isActive}
                 onNavigate={() => setMobileOpen(false)}
               />
@@ -379,7 +480,9 @@ export default function SiteHeader() {
                   onClick={() => setMobileOpen(false)}
                   className={[
                     "block rounded-lg px-3 py-2",
-                    isActive("/sobre-nosotros") ? "bg-[hsl(var(--brand)/0.10)] text-[hsl(var(--brand))] font-medium" : "hover:bg-zinc-50"
+                    isActive("/sobre-nosotros")
+                      ? "bg-[hsl(var(--brand)/0.10)] text-[hsl(var(--brand))] font-medium"
+                      : "hover:bg-zinc-50",
                   ].join(" ")}
                 >
                   Sobre nosotros
@@ -389,99 +492,23 @@ export default function SiteHeader() {
                   onClick={() => setMobileOpen(false)}
                   className={[
                     "block rounded-lg px-3 py-2",
-                    isActive("/contacto") ? "bg-[hsl(var(--brand)/0.10)] text-[hsl(var(--brand))] font-medium" : "hover:bg-zinc-50"
+                    isActive("/contacto")
+                      ? "bg-[hsl(var(--brand)/0.10)] text-[hsl(var(--brand))] font-medium"
+                      : "hover:bg-zinc-50",
                   ].join(" ")}
                 >
                   Contacto
                 </Link>
               </div>
 
-              {/* (Opcional) Utilidades y Aprender: descomenta si las usas */}
-              {/*
-              <div className="h-px bg-zinc-200 my-1" />
-              <Link ...>Utilidades</Link>
-              <Link ...>Aprender</Link>
-              */}
+              {/* (Opcional) Futuro: Utilidades / Blog */}
+              {/* <div className="h-px bg-zinc-200 my-1" />
+              <Link href="/utilidades" ...>Utilidades</Link>
+              <Link href="/blog" ...>Blog</Link> */}
             </nav>
           </div>
         </>
       )}
     </header>
-  );
-}
-
-function MobileAccordion({
-  label,
-  baseHref,
-  items,
-  openByDefault,
-  isActive,
-  onNavigate,
-}: {
-  label: string;
-  baseHref: string;
-  items: { href: string; label: string }[];
-  openByDefault?: boolean;
-  isActive: (p: string) => boolean;
-  onNavigate: () => void;
-}) {
-  const [open, setOpen] = useState(!!openByDefault);
-  const toggle = () => setOpen(o => !o);
-
-  const anyChildActive = items.some(it => isActive(it.href)) || isActive(baseHref);
-
-  return (
-    <div>
-      <div className="flex items-center justify-between">
-        <Link
-          href={baseHref}
-          onClick={onNavigate}
-          className={[
-            "block rounded-lg px-3 py-2",
-            anyChildActive ? "bg-[hsl(var(--brand)/0.10)] text-[hsl(var(--brand))] font-medium" : "hover:bg-zinc-50"
-          ].join(" ")}
-        >
-          {label}
-        </Link>
-        <button
-          onClick={toggle}
-          className="rounded p-2 hover:bg-zinc-100"
-          aria-expanded={open}
-          aria-controls={`acc-${label}`}
-          aria-label={`Desplegar ${label}`}
-        >
-          <svg className="h-4 w-4 transition-transform" style={{ transform: open ? "rotate(180deg)" : "none" }} viewBox="0 0 24 24" aria-hidden>
-            <path fill="currentColor" d="M7 10l5 5 5-5H7z" />
-          </svg>
-        </button>
-      </div>
-      <div
-        id={`acc-${label}`}
-        className={[
-          "grid overflow-hidden transition-[grid-template-rows,opacity] duration-150 ease-out",
-          open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
-        ].join(" ")}
-      >
-        <div className="min-h-0">
-          <div className="flex flex-wrap gap-2 px-3 pb-2 pt-1">
-            {items.map(it => (
-              <Link
-                key={it.href}
-                href={it.href}
-                onClick={onNavigate}
-                className={[
-                  "px-3 py-1.5 rounded-lg text-sm",
-                  isActive(it.href)
-                    ? "bg-[hsl(var(--brand)/0.12)] text-[hsl(var(--brand))] font-medium"
-                    : "bg-zinc-50 hover:bg-zinc-100 text-zinc-800"
-                ].join(" ")}
-              >
-                {it.label}
-              </Link>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
   );
 }
