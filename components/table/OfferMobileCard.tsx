@@ -1,5 +1,8 @@
 // components/table/OfferMobileCard.tsx
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { productSlug } from "@/lib/slug";
 
 /** Copiamos el tipo mínimo compatible con AllIndexTable */
@@ -21,7 +24,7 @@ export type Offer = {
   updated_at?: string | null;
 };
 
-/* ---------- Helpers locales ligeros (sin dependencias externas) ---------- */
+/* ---------- Helpers locales ligeros ---------- */
 const niceMetal: Record<string, string> = { gold: "Oro", silver: "Plata", platinum: "Platino", palladium: "Paladio" };
 const niceForm: Record<string, string> = { bar: "Lingote", coin: "Moneda" };
 
@@ -71,7 +74,6 @@ function premiumClass(pct: unknown) {
   if (v <= 10) return "text-amber-600";
   return "text-rose-600";
 }
-
 function premiumTone(pct: unknown) {
   const v = Number(pct);
   if (!Number.isFinite(v)) return "bg-zinc-100 text-zinc-700";
@@ -95,8 +97,12 @@ export default function OfferMobileCard({
   premiumPct: number | null | undefined;
 }) {
   const o = offer;
-  const tone = idx === 0 && page === 1 ? "bg-[hsl(var(--brand)/50)]" : "";
   const isTop = idx === 0 && page === 1;
+
+  const pathname = usePathname();
+  const isDealerPage =
+    !!pathname &&
+    (pathname.startsWith(`/tienda/${o.dealer_id}`) || pathname.startsWith(`/tiendas/${o.dealer_id}`));
 
   return (
     <div
@@ -106,17 +112,7 @@ export default function OfferMobileCard({
         isTop ? "shadow-md ring-[hsl(var(--brand)/0.45)]" : "hover:shadow-md",
       ].join(" ")}
     >
-      {/* insignia TOP muy sutil */}
-      {/* {isTop && (
-        <div className="mb-1 -mt-1 -mr-1 flex justify-end">
-          <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium
-                           bg-[hsl(var(--brand)/0.10)] text-[hsl(var(--brand))] ring-1 ring-inset ring-[hsl(var(--brand)/0.25)]">
-            Mejor precio
-          </span>
-        </div>
-      )} */}
-
-      {/* Meta: metal / formato / tamaño en píldoras */}
+      {/* Meta: metal / formato / tamaño */}
       <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
         <span className="rounded-full px-2 py-0.5 bg-zinc-50 ring-1 ring-inset ring-zinc-200 text-zinc-700">
           {niceMetal[o.metal]}
@@ -134,37 +130,69 @@ export default function OfferMobileCard({
         {displayName(o)}
       </div>
 
-      {/* Precio + premium + CTA comprar */}
+      {/* Precio + premium + CTA */}
       <div className="mt-2 flex items-end justify-between gap-3">
         <div className="min-w-0">
           <div className="text-lg font-semibold text-zinc-900">{fmtMoney(o.price_eur)}</div>
           <div className="mt-1 inline-flex items-center gap-1">
-            <span className={[
-              "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] ring-1 ring-inset",
-              premiumTone(premiumPct),
-            ].join(" ")}>
+            <span
+              className={[
+                "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] ring-1 ring-inset",
+                premiumTone(premiumPct),
+              ].join(" ")}
+            >
               Premium {fmtPct(premiumPct)}
             </span>
           </div>
         </div>
 
-        {o.buy_url ? (
-          <a
-            href={o.buy_url}
-            target="_blank"
-            rel="noreferrer"
-            aria-label={`Comprar en ${dealerLabel}`}
-            className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium
+        <div className="flex items-center gap-2">
+          {o.buy_url ? (
+            <a
+              href={o.buy_url}
+              target="_blank"
+              rel="noreferrer"
+              aria-label={`Comprar en ${dealerLabel}`}
+              className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium
                        bg-[hsl(var(--brand))] text-white hover:opacity-90 focus:outline-none
                        focus-visible:ring-2 focus-visible:ring-[hsl(var(--brand)/0.35)] whitespace-nowrap"
-          >
-            Comprar
-          </a>
-        ) : (
-          <span className="inline-flex items-center rounded-lg px-3 py-2 text-sm text-zinc-400 ring-1 ring-inset ring-zinc-200">
-            Sin enlace
-          </span>
-        )}
+            >
+              Comprar
+            </a>
+          ) : (
+            <span className="inline-flex items-center rounded-lg px-3 py-2 text-sm text-zinc-400 ring-1 ring-inset ring-zinc-200">
+              Sin enlace
+            </span>
+          )}
+
+          {/* Botón icono tienda (oculto en la ficha de esa tienda) */}
+          {!isDealerPage && (
+            <Link
+              href={`/tiendas/${o.dealer_id}`}
+              className="inline-flex items-center justify-center rounded-md border border-zinc-200 bg-white px-2.5 py-2 text-zinc-600 hover:bg-zinc-50 hover:text-zinc-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--brand)/0.35)]"
+              aria-label={`Ver ficha de la tienda ${dealerLabel}`}
+              title="Ficha de tienda"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="h-4 w-4"
+                aria-hidden
+              >
+                <path d="M3 9l1.5-6h15L21 9" />
+                <path d="M4 9h16v11H4z" />
+                <path d="M9 14v6" />
+                <path d="M15 14v6" />
+                <path d="M9 9V4h6v5" />
+              </svg>
+            </Link>
+          )}
+        </div>
       </div>
 
       {/* Acciones secundarias y dealer */}

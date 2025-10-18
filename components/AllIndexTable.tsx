@@ -395,7 +395,12 @@ export default function AllIndexTable({
     setSortKey(key);
     setSortDir(dir);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [
+    forceDealer,
+    forceMetal,
+    forceForm,
+    forceBuckets?.join(","),
+  ]);
 
   useEffect(() => {
     const sp = new URLSearchParams();
@@ -678,6 +683,16 @@ export default function AllIndexTable({
     forceBuckets,
   ]);
   useEffect(() => {
+    // Si estamos en /tienda/{dealer}, fijamos el filtro y evitamos podas
+    if (forceDealer) {
+      setSelDealers((prev) => {
+        if (prev.size === 1 && prev.has(forceDealer)) return prev;
+        return new Set([forceDealer]);
+      });
+      return;
+    }
+    // Modo normal: poda dealers sin resultados
+    if (forceDealer) { setPage(1); /* junto al setSelDealers(...) */ }
     setSelDealers((prev) => {
       let changed = false;
       const next = new Set(prev);
@@ -689,7 +704,7 @@ export default function AllIndexTable({
       }
       return changed ? next : prev;
     });
-  }, [dealerCounts]);
+  }, [dealerCounts, forceDealer]);
 
   /* ---------- Helpers UI ---------- */
   const resetAll = () => {

@@ -1,5 +1,8 @@
 // components/table/OffersRow.tsx
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { productSlug } from "@/lib/slug";
 
 /** ⚠️ Copia mínima del tipo que usas en AllIndexTable */
@@ -87,6 +90,10 @@ export default function OffersRow({
   premiumPct: number | null | undefined;
 }) {
   const o = offer;
+  const pathname = usePathname();
+  const isDealerPage =
+    !!pathname &&
+    (pathname.startsWith(`/tienda/${o.dealer_id}`) || pathname.startsWith(`/tiendas/${o.dealer_id}`));
 
   return (
     <tr
@@ -144,18 +151,56 @@ export default function OffersRow({
 
       <td className="td text-left">
         {o.buy_url ? (
-          <a
-            href={o.buy_url}
-            target="_blank"
-            rel="noreferrer"
-            aria-label={`Comprar en ${dealerLabel}`}
-            className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium focus:outline-none btn-brand whitespace-nowrap"
+          <div
+            className="flex items-center gap-2 justify-end w-[228px]" // ⬅️ ancho fijo del grupo
           >
-            <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden>
-              <path fill="currentColor" d="M14 3h7v7h-2V6.41l-9.29 9.3-1.42-1.42 9.3-9.29H14V3ZM5 5h6v2H7v10h10v-4h2v6H5V5Z"/>
-            </svg>
-            {dealerLabel}
-          </a>
+            {/* Botón principal: Comprar (ocupa todo el ancho disponible) */}
+            <a
+              href={o.buy_url}
+              target="_blank"
+              rel="noreferrer"
+              aria-label={`Comprar en ${dealerLabel}`}
+              title={`Comprar en ${dealerLabel}`}
+              className="inline-flex h-9 items-center justify-center gap-1 rounded-lg px-3 text-sm font-medium
+                        focus:outline-none btn-brand whitespace-nowrap flex-1"
+            >
+              <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden>
+                <path fill="currentColor" d="M14 3h7v7h-2V6.41l-9.29 9.3-1.42-1.42 9.3-9.29H14V3ZM5 5h6v2H7v10h10v-4h2v6H5V5Z"/>
+              </svg>
+              {dealerLabel}
+            </a>
+
+            {/* Botón icono tienda → Ficha (oculto si ya estás en esa tienda) */}
+            {!isDealerPage && (
+              <Link
+                href={`/tiendas/${o.dealer_id}`}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-zinc-200
+                          bg-white text-zinc-600 hover:bg-zinc-50 hover:text-zinc-800
+                          focus:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--brand)/0.35)]"
+                aria-label={`Ver ficha de la tienda ${dealerLabel}`}
+                title="Ficha de tienda"
+              >
+                {/* storefront icon trazado (como pediste) */}
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="h-4 w-4"
+                  aria-hidden
+                >
+                  <path d="M3 9l1.5-6h15L21 9" />
+                  <path d="M4 9h16v11H4z" />
+                  <path d="M9 14v6" />
+                  <path d="M15 14v6" />
+                  <path d="M9 9V4h6v5" />
+                </svg>
+              </Link>
+            )}
+          </div>
         ) : (
           <span className="text-zinc-400">—</span>
         )}

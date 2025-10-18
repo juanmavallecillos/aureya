@@ -23,7 +23,6 @@ type Offer = {
   shipping_eur: number | null;
   total_eur: number | null;
   premium_pct?: number | null;
-  stock?: string | null;
   buy_url?: string | null;
   scraped_at?: string | null;
 };
@@ -356,10 +355,6 @@ export default async function ProductPage(
                     <div className="font-medium">{fmtPct(best.premium_pct)}</div>
                   </div>
                   <div>
-                    <div className="text-zinc-500">Stock</div>
-                    <div className="font-medium">{best.stock ?? "—"}</div>
-                  </div>
-                  <div>
                     <div className="text-zinc-500">Extraído</div>
                     <div className="font-medium">
                       {best.scraped_at
@@ -416,7 +411,7 @@ export default async function ProductPage(
         </div>
       </section>
 
-            {/* Tabla de ofertas */}
+      {/* Tabla de ofertas */}
       <section className="mt-8">
         <h2 className="text-lg font-semibold">Todas las ofertas para este SKU</h2>
         <p className="text-sm text-zinc-600 mt-1">
@@ -426,7 +421,6 @@ export default async function ProductPage(
         {/* 🧩 Bloque único: Spot + Tabla (como en la landing, sin buscador) */}
         <div className="mt-3">
           
-
           {/* La tabla se renderiza “desnuda” dentro del mismo card */}
             <SkuOffersTable
               offers={offers}

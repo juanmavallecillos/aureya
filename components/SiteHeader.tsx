@@ -253,8 +253,16 @@ function MobileAccordionGroup({
    ========================= */
 export default function SiteHeader() {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const pathname = usePathname();
-  const isActive = (p: string) => pathname === p || pathname.startsWith(p + "/");
+  const rawPathname = usePathname();
+  // Normaliza: si viene vacío/undefined en producción, trátalo como "/"
+  const pathname = rawPathname && rawPathname.length > 0 ? rawPathname : "/";
+  const normalize = (p: string) => (p === "/" ? "/" : p.replace(/\/+$/, ""));
+  const isActive = (p: string) => {
+    const cur = normalize(pathname);
+    const tgt = normalize(p);
+    if (tgt === "/") return cur === "/";
+    return cur === tgt || cur.startsWith(tgt + "/");
+  };
 
   const inicioActive = isActive("/");
   const tiendasActive = isActive("/tiendas");
@@ -466,7 +474,7 @@ export default function SiteHeader() {
               <MobileAccordionGroup
                 label="Metales"
                 groups={metalGroups}
-                openByDefault={pathname.startsWith("/oro") || pathname.startsWith("/plata")}
+                openByDefault={isActive("/oro") || isActive("/plata")}
                 isActive={isActive}
                 onNavigate={() => setMobileOpen(false)}
               />

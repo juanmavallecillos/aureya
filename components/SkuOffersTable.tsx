@@ -11,6 +11,7 @@ import SortableThSku, {
 import InfoBarSpot from "@/components/table/InfoBarSpot";
 import InfoBarSpotCompact from "@/components/table/InfoBarSpotCompact";
 import { cdnPath, toAbsolute } from "@/lib/cdn";
+import Link from "next/link";
 
 /* ---------- Tipos ---------- */
 type Offer = {
@@ -19,7 +20,6 @@ type Offer = {
   shipping_eur: number | null;
   total_eur: number | null;
   premium_pct?: number | null;
-  stock?: string | null;
   buy_url?: string | null;
   scraped_at?: string | null;
 };
@@ -110,10 +110,6 @@ export default function SkuOffersTable({
         case "premium":
           va = num(a.premium_pct);
           vb = num(b.premium_pct);
-          break;
-        case "stock":
-          va = str(a.stock ?? "zzzz"); // “—” al final
-          vb = str(b.stock ?? "zzzz");
           break;
         default:
           va = num(a.total_eur);
@@ -211,7 +207,7 @@ export default function SkuOffersTable({
                 activeKey={sortKey}
                 dir={sortDir}
                 onSort={onSort}
-                align="right"
+                align="center"
                 w="w-28"
               />
               <SortableThSku
@@ -220,7 +216,7 @@ export default function SkuOffersTable({
                 activeKey={sortKey}
                 dir={sortDir}
                 onSort={onSort}
-                align="right"
+                align="center"
                 w="w-28"
               />
               <SortableThSku
@@ -229,7 +225,7 @@ export default function SkuOffersTable({
                 activeKey={sortKey}
                 dir={sortDir}
                 onSort={onSort}
-                align="right"
+                align="center"
                 w="w-32"
               />
               <SortableThSku
@@ -238,19 +234,10 @@ export default function SkuOffersTable({
                 activeKey={sortKey}
                 dir={sortDir}
                 onSort={onSort}
-                align="right"
+                align="center"
                 w="w-32"
               />
-              <SortableThSku
-                label="Stock"
-                k="stock"
-                activeKey={sortKey}
-                dir={sortDir}
-                onSort={onSort}
-                align="center"
-                w="w-28"
-              />
-              <th className="th text-right w-40">Comprar</th>
+              <th className="th text-left w-40">Comprar</th>
             </tr>
           </thead>
 
@@ -273,57 +260,81 @@ export default function SkuOffersTable({
                   ].join(" ")}
                 >
                   <td className="td px-4 py-2.5">
-                    <div className="inline-flex items-center gap-1.5">
+                    <Link
+                      href={`/tiendas/${o.dealer_id}`}
+                      className="inline-flex items-center gap-1.5 hover:underline decoration-[hsl(var(--brand))] underline-offset-2"
+                      aria-label={`Ver ficha de ${dealerLabel}`}
+                      title={`Ficha de ${dealerLabel}`}
+                    >
                       <span className="font-medium">{dealerLabel}</span>
-                      {verified ? (
-                        <VerifiedBadge
-                          size={16}
-                          className="translate-y-[1px]"
-                        />
-                      ) : null}
-                    </div>
+                      {verified ? <VerifiedBadge size={16} className="translate-y-[1px]" /> : null}
+                    </Link>
                   </td>
-                  <td className="td text-right tabular-nums px-4 py-2.5">
+                  <td className="td text-center tabular-nums px-4 py-2.5">
                     {fmtMoney(o.price_eur)}
                   </td>
-                  <td className="td text-right tabular-nums px-4 py-2.5">
+                  <td className="td text-center tabular-nums px-4 py-2.5">
                     {fmtMoney(o.shipping_eur)}
                   </td>
-                  <td className="td text-right tabular-nums font-semibold text-zinc-900 px-4 py-2.5">
+                  <td className="td text-center tabular-nums font-semibold text-zinc-900 px-4 py-2.5">
                     {fmtMoney(o.total_eur)}
                   </td>
                   <td
-                    className={`td text-right tabular-nums px-4 py-2.5 ${premiumClass(
+                    className={`td text-center tabular-nums px-4 py-2.5 ${premiumClass(
                       o.premium_pct
                     )}`}
                   >
                     {fmtPct(o.premium_pct)}
                   </td>
-                  <td className="td text-center px-4 py-2.5">
-                    {o.stock ?? "—"}
-                  </td>
-                  <td className="td text-right px-4 py-2.5">
+                  <td className="td text-left px-4 py-2.5">
                     {o.buy_url ? (
-                      <a
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium bg-[hsl(var(--brand))] text-white hover:opacity-90 focus-visible:ring-2 focus-visible:ring-[hsl(var(--brand)/0.35)]"
-                        href={o.buy_url}
-                        aria-label="Comprar"
-                        title={`Comprar en ${dealerLabel}`}
-                      >
-                        Comprar
-                        <svg
-                          viewBox="0 0 24 24"
-                          className="h-4 w-4"
-                          aria-hidden
+                      <div className="flex items-center gap-2">
+                        {/* Botón principal: Comprar (texto negro) */}
+                        <a
+                          href={o.buy_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex h-9 items-center justify-center gap-1 rounded-lg px-3 text-sm font-medium btn-brand !text-black"
+                          aria-label={`Comprar en ${dealerLabel}`}
+                          title={`Comprar en ${dealerLabel}`}
                         >
-                          <path
-                            fill="currentColor"
-                            d="M14 3h7v7h-2V6.41l-9.29 9.3-1.42-1.42 9.3-9.29H14V3ZM5 5h6v2H7v10h10v-4h2v6H5V5Z"
-                          />
-                        </svg>
-                      </a>
+                          <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden>
+                            <path
+                              fill="currentColor"
+                              d="M14 3h7v7h-2V6.41l-9.29 9.3-1.42-1.42 9.3-9.29H14V3ZM5 5h6v2H7v10h10v-4h2v6H5V5Z"
+                            />
+                          </svg>
+                          Comprar
+                        </a>
+
+                        {/* Botón icono tienda → Ficha de tienda */}
+                        <a
+                          href={`/tiendas/${o.dealer_id}`}
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-zinc-200
+                                    bg-white text-zinc-600 hover:bg-zinc-50 hover:text-zinc-800
+                                    focus:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--brand)/0.35)]"
+                          aria-label={`Ver ficha de la tienda ${dealerLabel}`}
+                          title="Ficha de tienda"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            className="h-4 w-4"
+                            aria-hidden
+                          >
+                            <path d="M3 9l1.5-6h15L21 9" />
+                            <path d="M4 9h16v11H4z" />
+                            <path d="M9 14v6" />
+                            <path d="M15 14v6" />
+                            <path d="M9 9V4h6v5" />
+                          </svg>
+                        </a>
+                      </div>
                     ) : (
                       <span className="text-zinc-400">—</span>
                     )}
@@ -394,7 +405,6 @@ export default function SkuOffersTable({
               <option value="shipping">Envío</option>
               <option value="premium">Prima</option>
               <option value="dealer">Tienda</option>
-              <option value="stock">Stock</option>
             </select>
 
             <button
@@ -446,7 +456,6 @@ export default function SkuOffersTable({
                     shipping: "Envío",
                     premium: "Prima",
                     dealer: "Tienda",
-                    stock: "Stock",
                   } as Record<SortKeySku, string>
                 )[sortKey]
               }
@@ -473,31 +482,67 @@ export default function SkuOffersTable({
                 <div>
                   <div className="text-xs text-zinc-600">Tienda</div>
                   <div className="font-medium flex items-center gap-1">
-                    {dealerLabel}
-                    {verified && (
-                      <VerifiedBadge size={16} className="translate-y-[1px]" />
-                    )}
+                    <Link
+                      href={`/tiendas/${o.dealer_id}`}
+                      className="hover:underline decoration-[hsl(var(--brand))] underline-offset-2"
+                      aria-label={`Ver ficha de ${dealerLabel}`}
+                      title={`Ficha de ${dealerLabel}`}
+                    >
+                      {dealerLabel}
+                    </Link>
+                    {verified && <VerifiedBadge size={16} className="translate-y-[1px]" />}
                   </div>
                 </div>
 
-                {o.buy_url ? (
-                  <a
-                    href={o.buy_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium btn-brand"
-                    aria-label={`Comprar en ${dealerLabel}`}
-                    title={`Comprar en ${dealerLabel}`}
-                  >
-                    Comprar
-                    <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden>
-                      <path
-                        fill="currentColor"
-                        d="M14 3h7v7h-2V6.41l-9.29 9.3-1.42-1.42 9.3-9.29H14V3ZM5 5h6v2H7v10h10v-4h2v6H5V5Z"
-                      />
-                    </svg>
-                  </a>
-                ) : null}
+                <div className="flex items-center gap-2">
+                  {o.buy_url ? (
+                    <>
+                      <a
+                        href={o.buy_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex h-9 items-center justify-center gap-1 rounded-lg px-3 text-sm font-medium btn-brand !text-black"
+                        aria-label={`Comprar en ${dealerLabel}`}
+                        title={`Comprar en ${dealerLabel}`}
+                      >
+                        Comprar
+                        <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden>
+                          <path
+                            fill="currentColor"
+                            d="M14 3h7v7h-2V6.41l-9.29 9.3-1.42-1.42 9.3-9.29H14V3ZM5 5h6v2H7v10h10v-4h2v6H5V5Z"
+                          />
+                        </svg>
+                      </a>
+
+                      <a
+                        href={`/tiendas/${o.dealer_id}`}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-zinc-200
+                                  bg-white text-zinc-600 hover:bg-zinc-50 hover:text-zinc-800
+                                  focus:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--brand)/0.35)]"
+                        aria-label={`Ver ficha de la tienda ${dealerLabel}`}
+                        title="Ficha de tienda"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className="h-4 w-4"
+                          aria-hidden
+                        >
+                          <path d="M3 9l1.5-6h15L21 9" />
+                          <path d="M4 9h16v11H4z" />
+                          <path d="M9 14v6" />
+                          <path d="M15 14v6" />
+                          <path d="M9 9V4h6v5" />
+                        </svg>
+                      </a>
+                    </>
+                  ) : null}
+                </div>
               </div>
 
               <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
@@ -528,10 +573,6 @@ export default function SkuOffersTable({
                   >
                     {fmtPct(o.premium_pct)}
                   </div>
-                </div>
-                <div>
-                  <div className="text-zinc-500">Stock</div>
-                  <div className="font-medium">{o.stock ?? "—"}</div>
                 </div>
                 <div>
                   <div className="text-zinc-500">Extraído</div>
