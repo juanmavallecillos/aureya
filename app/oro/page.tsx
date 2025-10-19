@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import AllIndexTable from "@/components/AllIndexTable";
+import AllIndexTable from "@/components/AllIndexTable.server";
 import MicroFAQ from "@/components/MicroFAQ";
 import { getFaq, faqToJsonLd } from "@/lib/faqData";
 

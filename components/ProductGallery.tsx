@@ -3,6 +3,7 @@
 import Image from "next/image";
 import * as React from "react";
 import clsx from "clsx";
+import { cdnUrl } from "@/lib/cdn";
 
 type Props = {
   images: string[];
@@ -12,9 +13,8 @@ type Props = {
 
 function toCdnUrl(path: string) {
   if (!path) return "";
-  if (path.startsWith("/api/cdn?path=")) return path;
-  const clean = path.startsWith("/") ? path.slice(1) : path;
-  return `/api/cdn?path=${encodeURIComponent(clean)}`;
+  // admite tanto "media/..." como "/media/..." o ya-absurdas (no re-duplica):
+  return cdnUrl(path);
 }
 
 export default function ProductGallery({ images, altBase, className }: Props) {

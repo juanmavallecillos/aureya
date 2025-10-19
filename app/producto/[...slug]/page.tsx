@@ -48,6 +48,13 @@ type HistDoc = { sku: string; series: { date: string; best_total_eur: number | n
 type DealersMap = Record<string, { label: string; verified?: boolean }>;
 type MediaIndex = Record<string, string[]>;
 
+// Spot global (lo leemos desde meta/spot.json en el servidor)
+type SpotDoc = {
+  gold_eur_per_g?: number;
+  silver_eur_per_g?: number;
+  updated_at?: string;
+};
+
 const OZ_TO_G = 31.1034768;
 
 /* ---------- Utils formato ---------- */
@@ -236,39 +243,22 @@ export default async function ProductPage(
     : [];
   const best = [...offers].sort((a, b) => Number(a.total_eur) - Number(b.total_eur))[0] || null;
 
-  // 6) Derivados
-  const bucket = bucketFromWeight(data.meta.weight_g);
-  const spotPerG = data.spot?.eur_per_g ?? null;
-  const spotPerOz = spotPerG != null ? spotPerG * OZ_TO_G : null;
-
+  // 6) Derivados de la ficha (no usamos fetch en cliente para spot)
   const updatedAt = data?.updated_at ? new Date(data.updated_at) : null;
   const updatedStr = updatedAt
     ? updatedAt.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })
     : "—";
 
-  // 👉 Normalizamos metal para InfoBarSpot
-  const metalToken = (() => {
-    const x = (data.meta.metal || "").toLowerCase();
-    if (x === "oro" || x === "gold") return "gold";
-    if (x === "plata" || x === "silver") return "silver";
-    return x;
-  })();
+  // 7) Spot GLOBAL (desde CDN, en servidor) → se pasa a la tabla como prop
+  const spot = await fetchJsonOrnull<SpotDoc>("meta/spot.json", { revalidate: 120 });
 
-  // Props para InfoBarSpot (solo se rellena el metal del SKU)
-  const spotLoading = false;
-  const goldEurPerG = metalToken === "gold" ? spotPerG : null;
-  const silverEurPerG = metalToken === "silver" ? spotPerG : null;
-  const goldEurPerOz = metalToken === "gold" ? spotPerOz : null;
-  const silverEurPerOz = metalToken === "silver" ? spotPerOz : null;
-  const effectiveUpdatedAt = data.spot?.updated_at || data.updated_at || null;
-
-  /* 7) GALERÍA */
+  /* 8) GALERÍA */
   const mediaIdx = await fetchJson<MediaIndex>("media/index.json", { revalidate: 300 }).catch(
     () => ({} as MediaIndex)
   );
   const rawPaths = Array.isArray(mediaIdx?.[data.sku]) ? mediaIdx[data.sku] : [];
   const preferred = selectPreferredImages(rawPaths);
-  const galleryImages: string[] = preferred.slice(0, 4).map((p) => cdnPath(p));
+  const galleryImages: string[] = preferred.slice(0, 4);
   const jsonImages = galleryImages.length
     ? galleryImages
     : (data.images && data.images.length ? data.images : data.image ? [data.image] : []);
@@ -286,7 +276,7 @@ export default async function ProductPage(
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <Chip>{niceMetal(data.meta.metal)}</Chip>
               <Chip>{niceForm(data.meta.form)}</Chip>
-              {bucket && <Chip>{bucket}</Chip>}
+              {bucketFromWeight(data.meta.weight_g) && <Chip>{bucketFromWeight(data.meta.weight_g)}</Chip>}
               <span className="text-sm text-zinc-600 ml-1">
                 Actualizado: <span className="font-medium">{updatedStr}</span>
                 {updatedAt && <span className="opacity-70"> ({updatedAt.toLocaleDateString("es-ES")})</span>}
@@ -418,22 +408,22 @@ export default async function ProductPage(
           Ordenadas por <em>total</em> (precio + envío). La primera fila coincide con la mejor oferta.
         </p>
 
-        {/* 🧩 Bloque único: Spot + Tabla (como en la landing, sin buscador) */}
         <div className="mt-3">
-          
-          {/* La tabla se renderiza “desnuda” dentro del mismo card */}
-            <SkuOffersTable
-              offers={offers}
-              dealers={dealers}
-              pageSizeDefault={10}
-            />
-            </div>
+          <SkuOffersTable
+            offers={offers}
+            dealers={dealers}
+            pageSizeDefault={10}
+            spotInitial={spot}
+          />
+        </div>
       </section>
 
       {/* JSON-LD */}
       {(() => {
         const base = (process.env.NEXT_PUBLIC_SITE_URL || "").replace(/\/+$/, "");
         const productUrl = base ? `${base}/producto/${canonicalSlug}` : undefined;
+        const jsonImagesAbs = (galleryImages.length ? galleryImages : (data.images?.length ? data.images : (data.image ? [data.image] : [])))
+          .map(p => cdnPath(p));
         const jsonLd: Record<string, any> = {
           "@context": "https://schema.org",
           "@type": "Product",

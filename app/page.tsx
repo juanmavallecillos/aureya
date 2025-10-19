@@ -1,5 +1,5 @@
 import { fetchJsonOrNullServer } from "@/lib/cdn-server";
-import AllIndexTable from "@/components/AllIndexTable";
+import AllIndexTable from "@/components/AllIndexTable.server";
 import MicroFAQ from "@/components/MicroFAQ";
 import { getFaq, faqToJsonLd } from "@/lib/faqData";
 

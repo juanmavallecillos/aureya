@@ -1,7 +1,7 @@
 // app/[metal]/[form]/[bucket]/page.tsx
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import AllIndexTable from "@/components/AllIndexTable";
+import AllIndexTable from "@/components/AllIndexTable.server";
 import { fetchJsonServer as fetchJson } from "@/lib/cdn-server";
 
 /* ---------------- Normalización de segmentos ---------------- */

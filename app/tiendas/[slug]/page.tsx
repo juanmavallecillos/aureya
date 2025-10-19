@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { fetchJsonOrNullServer as fetchJson } from "@/lib/cdn-server";
-import AllIndexTable from "@/components/AllIndexTable";
+import AllIndexTable from "@/components/AllIndexTable.server";
 import VerifiedBadge from "@/components/VerifiedBadge";
 
 /* ---------------- Tipos ---------------- */

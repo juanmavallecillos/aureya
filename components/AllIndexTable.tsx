@@ -2,8 +2,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useDealerMeta } from "@/lib/useDealerMeta";
-import { cdnPath, toAbsolute } from "@/lib/cdn";
+import { useDealerMeta, type DealerMeta } from "@/lib/useDealerMeta";
+import { cdnUrl } from "@/lib/cdn";
 
 // 🆕 componentes desacoplados
 import FiltersBarCompact from "@/components/table/FiltersBarCompact";
@@ -23,7 +23,7 @@ import InfoBarSpotCompact from "@/components/table/InfoBarSpotCompact";
 import { timeAgo } from "@/lib/format";
 
 /* ---------- Tipos ---------- */
-type Offer = {
+export type Offer = {
   sku: string;
   dealer_id: string;
   metal: string;
@@ -41,13 +41,14 @@ type Offer = {
   updated_at?: string | null;
 };
 type AllOffersDoc = { updated_at: string; offers: Offer[] };
+
 type ManifestLike = {
   metals?: string[];
   forms?: string[];
   buckets?: string[];
   dealers?: string[];
 };
-type SpotDoc = {
+export type SpotDoc = {
   gold_eur_per_g?: number;
   silver_eur_per_g?: number;
   updated_at?: string;
@@ -64,6 +65,26 @@ const fmtMoney = (v: unknown) =>
         currency: "EUR",
       }).format(Number(v))
     : "—";
+
+const dedupeByKey = (arr: Offer[]) => {
+  const seen = new Set<string>();
+  const unique: Offer[] = [];
+  for (const o of arr) {
+    const idTail = o.buy_url ? o.buy_url : String(o.price_eur ?? "");
+    const key = `${o.sku}|${o.dealer_id}|${idTail}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(o);
+  }
+  return unique;
+};
+
+const normalizeOffers = (raw: Offer[]) =>
+  raw.map((o) => ({
+    ...o,
+    metal: toMetalToken(o.metal as any),
+    form: toFormToken(o.form as any),
+  }));
 
 // Calcula premium vs spot (€/g) usando los datos de meta/spot.json.
 // Si spot aún no está cargado, cae al premium del backend (ex envío si existe).
@@ -175,7 +196,11 @@ function premiumClass(pct: unknown) {
 }
 
 /* ---------- Main ---------- */
-type AllIndexProps = {
+export type AllIndexProps = {
+  dealerMeta?: DealerMeta;
+  spotInitial?: SpotDoc | null;
+  offersInitial?: Offer[];
+  indexUpdatedAtInitial?: string | null;
   manifest?: ManifestLike;
   forceDealer?: string;
   hideDealerFacet?: boolean;
@@ -190,6 +215,10 @@ type AllIndexProps = {
 };
 
 export default function AllIndexTable({
+  dealerMeta: dealerMetaFromServer,
+  spotInitial,
+  offersInitial = [],
+  indexUpdatedAtInitial = null,
   manifest,
   forceDealer,
   hideDealerFacet,
@@ -202,13 +231,17 @@ export default function AllIndexTable({
   forceSku,
   dedupeMode = "key",
 }: AllIndexProps) {
-  const [offers, setOffers] = useState<Offer[]>([]);
-  const [indexUpdatedAt, setIndexUpdatedAt] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const indexUpdatedAt = indexUpdatedAtInitial ?? null;
+  const loading = false;
+
+  const baseOffers = useMemo(() => {
+    const norm = normalizeOffers(offersInitial || []);
+    return dedupeMode === "none" ? norm : dedupeByKey(norm);
+  }, [offersInitial, dedupeMode]);
 
   // SPOT
-  const [spot, setSpot] = useState<SpotDoc | null>(null);
-  const [spotLoading, setSpotLoading] = useState(true);
+  const [spot, setSpot] = useState<SpotDoc | null>(spotInitial ?? null);
+  const [spotLoading, setSpotLoading] = useState<boolean>(!Boolean(spotInitial));
 
   // MULTI: metal, formato, tiendas, tamaños
   const [selMetals, setSelMetals] = useState<Set<string>>(new Set());
@@ -224,98 +257,106 @@ export default function AllIndexTable({
   const [pageSize, setPageSize] = useState<number>(10);
   const [page, setPage] = useState<number>(1);
 
-  const dealerMeta = useDealerMeta();
+  const dealerMeta = dealerMetaFromServer ?? useDealerMeta(null, false);
 
-  /* ---------- Carga índice ---------- */
   useEffect(() => {
-    const ac = new AbortController();
-    setLoading(true);
+    const norm = normalizeOffers(offersInitial || []);
+    const out  = dedupeMode === "none" ? norm : dedupeByKey(norm);
+    // setOffers(out);
+    // setIndexUpdatedAt(indexUpdatedAtInitial ?? null);
+    // setLoading(false);
+  }, [offersInitial, indexUpdatedAtInitial, dedupeMode]);
 
-    const dedupeByKey = (arr: Offer[]) => {
-      const seen = new Set<string>();
-      const unique: Offer[] = [];
-      for (const o of arr) {
-        const idTail = o.buy_url ? o.buy_url : String(o.price_eur ?? "");
-        const key = `${o.sku}|${o.dealer_id}|${idTail}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        unique.push(o);
-      }
-      return unique;
-    };
+  // /* ---------- Carga índice ---------- */
+  // useEffect(() => {
+  //   const ac = new AbortController();
+  //   setLoading(true);
 
-    const load = async () => {
-      try {
-        // --- MODO FICHA (SKU): lee /prices/sku/{SKU}.json ---
-        if (forceSku) {
-          const url = toAbsolute(cdnPath(`prices/sku/${forceSku}.json`));
-          const r = await fetch(url, { cache: "no-store", signal: ac.signal });
-          if (!r.ok) throw new Error(`CDN ${r.status}`);
+  //   const dedupeByKey = (arr: Offer[]) => {
+  //     const seen = new Set<string>();
+  //     const unique: Offer[] = [];
+  //     for (const o of arr) {
+  //       const idTail = o.buy_url ? o.buy_url : String(o.price_eur ?? "");
+  //       const key = `${o.sku}|${o.dealer_id}|${idTail}`;
+  //       if (seen.has(key)) continue;
+  //       seen.add(key);
+  //       unique.push(o);
+  //     }
+  //     return unique;
+  //   };
 
-          const doc: {
-            updated_at?: string;
-            updatedAt?: string;
-            offers?: Offer[];
-          } = await r.json();
-          setIndexUpdatedAt(doc?.updated_at || doc?.updatedAt || null);
+  //   const load = async () => {
+  //     try {
+  //       // --- MODO FICHA (SKU): lee /prices/sku/{SKU}.json ---
+  //       if (forceSku) {
+  //         const url = cdnUrl(`prices/sku/${forceSku}.json`);
+  //         const r = await fetch(url, { signal: ac.signal, credentials: "omit", referrerPolicy: "no-referrer" });
+  //         if (!r.ok) throw new Error(`CDN ${r.status}`);
 
-          const raw = Array.isArray(doc?.offers) ? doc.offers : [];
-          const norm = raw.map((o) => ({
-            ...o,
-            metal: toMetalToken(o.metal as any),
-            form: toFormToken(o.form as any),
-          }));
+  //         const doc: {
+  //           updated_at?: string;
+  //           updatedAt?: string;
+  //           offers?: Offer[];
+  //         } = await r.json();
+  //         setIndexUpdatedAt(doc?.updated_at || doc?.updatedAt || null);
 
-          setOffers(dedupeMode === "none" ? norm : dedupeByKey(norm));
-          return;
-        }
+  //         const raw = Array.isArray(doc?.offers) ? doc.offers : [];
+  //         const norm = raw.map((o) => ({
+  //           ...o,
+  //           metal: toMetalToken(o.metal as any),
+  //           form: toFormToken(o.form as any),
+  //         }));
 
-        // --- MODO ÍNDICE: lee /prices/index/all_offers.json ---
-        const url = toAbsolute(cdnPath("prices/index/all_offers.json"));
-        const r = await fetch(url, { cache: "no-store", signal: ac.signal });
-        if (!r.ok) throw new Error(`CDN ${r.status}`);
+  //         setOffers(dedupeMode === "none" ? norm : dedupeByKey(norm));
+  //         return;
+  //       }
 
-        const doc: AllOffersDoc = await r.json();
-        setIndexUpdatedAt(doc?.updated_at || null);
+  //       // --- MODO ÍNDICE: lee /prices/index/all_offers.json ---
+  //       const url = cdnUrl("prices/index/all_offers.json");
+  //       const r = await fetch(url, { signal: ac.signal, credentials: "omit", referrerPolicy: "no-referrer" });
+  //       if (!r.ok) throw new Error(`CDN ${r.status}`);
 
-        const raw = Array.isArray(doc?.offers) ? doc.offers : [];
-        const norm = raw.map((o) => ({
-          ...o,
-          metal: toMetalToken(o.metal),
-          form: toFormToken(o.form),
-        }));
+  //       const doc: AllOffersDoc = await r.json();
+  //       setIndexUpdatedAt(doc?.updated_at || null);
 
-        setOffers(dedupeMode === "none" ? norm : dedupeByKey(norm));
-      } catch (err: any) {
-        if (err?.name !== "AbortError") {
-          console.error("all_offers fetch error:", err);
-        }
-      } finally {
-        setLoading(false);
-      }
-    };
+  //       const raw = Array.isArray(doc?.offers) ? doc.offers : [];
+  //       const norm = raw.map((o) => ({
+  //         ...o,
+  //         metal: toMetalToken(o.metal),
+  //         form: toFormToken(o.form),
+  //       }));
 
-    load();
-    return () => ac.abort();
-  }, [forceSku, dedupeMode]);
+  //       setOffers(dedupeMode === "none" ? norm : dedupeByKey(norm));
+  //     } catch (err: any) {
+  //       if (err?.name !== "AbortError") {
+  //         console.error("all_offers fetch error:", err);
+  //       }
+  //     } finally {
+  //       setLoading(false);
+  //     }
+  //   };
 
-  /* ---------- Carga spot ---------- */
-  useEffect(() => {
-    const ac = new AbortController();
-    const url = toAbsolute(cdnPath("meta/spot.json"));
+  //   load();
+  //   return () => ac.abort();
+  // }, [forceSku, dedupeMode]);
 
-    setSpotLoading(true);
-    fetch(url, { cache: "no-store", signal: ac.signal })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((doc: SpotDoc | null) => setSpot(doc))
-      .catch((err) => {
-        if (err?.name !== "AbortError") console.error("spot fetch error:", err);
-        setSpot(null);
-      })
-      .finally(() => setSpotLoading(false));
+  // /* ---------- Carga spot ---------- */
+  // useEffect(() => {
+  //   const ac = new AbortController();
+  //   const url = cdnUrl("meta/spot.json");
 
-    return () => ac.abort();
-  }, []);
+  //   setSpotLoading(true);
+  //   fetch(url, { signal: ac.signal, credentials: "omit", referrerPolicy: "no-referrer" })
+  //     .then((r) => (r.ok ? r.json() : null))
+  //     .then((doc: SpotDoc | null) => setSpot(doc))
+  //     .catch((err) => {
+  //       if (err?.name !== "AbortError") console.error("spot fetch error:", err);
+  //       setSpot(null);
+  //     })
+  //     .finally(() => setSpotLoading(false));
+
+  //   return () => ac.abort();
+  // }, []);
 
   /* ---------- Derivados spot (€/oz) ---------- */
   const goldEurPerG = spot?.gold_eur_per_g ?? null;
@@ -330,21 +371,21 @@ export default function AllIndexTable({
     if (manifest?.metals?.length)
       return Array.from(new Set(manifest.metals.map(toMetalToken)));
     return Array.from(
-      new Set(offers.map((o) => o.metal).filter(Boolean))
+      new Set(baseOffers.map((o) => o.metal).filter(Boolean))
     ).sort();
-  }, [offers, manifest]);
+  }, [baseOffers, manifest]);
 
   const forms = useMemo(() => {
     const base = manifest?.forms?.length
       ? Array.from(new Set(manifest.forms.map(toFormToken)))
-      : Array.from(new Set(offers.map((o) => o.form).filter(Boolean))).sort();
+      : Array.from(new Set(baseOffers.map((o) => o.form).filter(Boolean))).sort();
     return forceForm ? base.filter((f) => f === forceForm) : base;
-  }, [offers, manifest, forceForm]);
+  }, [baseOffers, manifest, forceForm]);
 
   const allBuckets = useMemo<string[]>(() => {
     const base = manifest?.buckets?.length
       ? [...manifest.buckets]
-      : Array.from(new Set(offers.map((o) => bucketFromWeight(o.weight_g))));
+      : Array.from(new Set(baseOffers.map((o) => bucketFromWeight(o.weight_g))));
     base.sort((a, b) => {
       const ga = bucketToGrams(a);
       const gb = bucketToGrams(b);
@@ -354,14 +395,14 @@ export default function AllIndexTable({
       return a.localeCompare(b);
     });
     return base;
-  }, [offers, manifest?.buckets]);
+  }, [baseOffers, manifest?.buckets]);
 
   const allDealers = useMemo(() => {
     if (manifest?.dealers?.length) return manifest.dealers;
     return Array.from(
-      new Set(offers.map((o) => o.dealer_id).filter(Boolean))
+      new Set(baseOffers.map((o) => o.dealer_id).filter(Boolean))
     ).sort();
-  }, [offers, manifest]);
+  }, [baseOffers, manifest]);
 
   /* ---------- URL <-> estado ---------- */
   useEffect(() => {
@@ -502,7 +543,7 @@ export default function AllIndexTable({
   };
 
   const filtered = useMemo(() => {
-    return [...offers]
+    return [...baseOffers]
       .filter((o) => {
         if (!textPass(o)) return false;
         if (selMetals.size && !selMetals.has(o.metal)) return false;
@@ -515,7 +556,6 @@ export default function AllIndexTable({
       .sort(comparator);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    offers,
     selMetals,
     selForms,
     selBuckets,
@@ -555,7 +595,7 @@ export default function AllIndexTable({
     const out: Record<string, number> = {};
     for (const m of metals) {
       let c = 0;
-      for (const o of offers) {
+      for (const o of baseOffers) {
         if (!textPass(o)) continue;
         if (o.metal !== m) continue;
         if (selForms.size && !selForms.has(o.form)) continue;
@@ -567,13 +607,13 @@ export default function AllIndexTable({
       out[m] = c;
     }
     return out;
-  }, [offers, metals, selForms, selBuckets, selDealers, q]);
+  }, [baseOffers, metals, selForms, selBuckets, selDealers, q]);
 
   const formCounts = useMemo(() => {
     const out: Record<string, number> = {};
     for (const f of forms) {
       let c = 0;
-      for (const o of offers) {
+      for (const o of baseOffers) {
         if (!textPass(o)) continue;
         if (o.form !== f) continue;
         if (selMetals.size && !selMetals.has(o.metal)) continue;
@@ -585,13 +625,13 @@ export default function AllIndexTable({
       out[f] = c;
     }
     return out;
-  }, [offers, forms, selMetals, selBuckets, selDealers, q]);
+  }, [baseOffers, forms, selMetals, selBuckets, selDealers, q]);
 
   const bucketCounts = useMemo(() => {
     const out: Record<string, number> = {};
     for (const b0 of allBuckets) {
       let c = 0;
-      for (const o of offers) {
+      for (const o of baseOffers) {
         if (!textPass(o)) continue;
         const b = bucketFromWeight(o.weight_g);
         if (b !== b0) continue;
@@ -603,13 +643,13 @@ export default function AllIndexTable({
       out[b0] = c;
     }
     return out;
-  }, [offers, allBuckets, selMetals, selForms, selDealers, q]);
+  }, [baseOffers, allBuckets, selMetals, selForms, selDealers, q]);
 
   const dealerCounts = useMemo(() => {
     const out: Record<string, number> = {};
     for (const d of allDealers) {
       let c = 0;
-      for (const o of offers) {
+      for (const o of baseOffers) {
         if (!textPass(o)) continue;
         if (o.dealer_id !== d) continue;
         if (selMetals.size && !selMetals.has(o.metal)) continue;
@@ -621,7 +661,7 @@ export default function AllIndexTable({
       out[d] = c;
     }
     return out;
-  }, [offers, allDealers, selMetals, selForms, selBuckets, q]);
+  }, [baseOffers, allDealers, selMetals, selForms, selBuckets, q]);
 
   useEffect(() => {
     setSelForms((prev) => {

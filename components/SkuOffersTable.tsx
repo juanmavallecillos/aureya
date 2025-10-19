@@ -10,7 +10,6 @@ import SortableThSku, {
 } from "@/components/skuTable/SortableThSku";
 import InfoBarSpot from "@/components/table/InfoBarSpot";
 import InfoBarSpotCompact from "@/components/table/InfoBarSpotCompact";
-import { cdnPath, toAbsolute } from "@/lib/cdn";
 import Link from "next/link";
 
 /* ---------- Tipos ---------- */
@@ -56,10 +55,12 @@ export default function SkuOffersTable({
   offers,
   dealers,
   pageSizeDefault = 10,
+  spotInitial = null,
 }: {
   offers: Offer[];
   dealers: DealersMap;
   pageSizeDefault?: 10 | 25 | 50 | 100 | number;
+  spotInitial?: SpotDoc | null;
 }) {
   /* -------- Orden/Paginación -------- */
   const [sortKey, setSortKey] = useState<SortKeySku>("total");
@@ -133,26 +134,28 @@ export default function SkuOffersTable({
   const pageRows = sorted.slice(start, end);
 
   /* -------- Spot (global) -------- */
-  const [spot, setSpot] = useState<SpotDoc | null>(null);
-  const [spotLoading, setSpotLoading] = useState<boolean>(true);
+  // const [spot, setSpot] = useState<SpotDoc | null>(null);
+  // const [spotLoading, setSpotLoading] = useState<boolean>(true);
 
-  useEffect(() => {
-    const ac = new AbortController();
-    const url = toAbsolute(cdnPath("meta/spot.json"));
+  // useEffect(() => {
+  //   const ac = new AbortController();
+  //   const url = toAbsolute(cdnPath("meta/spot.json"));
 
-    setSpotLoading(true);
-    fetch(url, { cache: "no-store", signal: ac.signal })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((doc: SpotDoc | null) => setSpot(doc))
-      .catch((err) => {
-        if (err?.name !== "AbortError") console.error("spot fetch error:", err);
-        setSpot(null);
-      })
-      .finally(() => setSpotLoading(false));
+  //   setSpotLoading(true);
+  //   fetch(url, { cache: "no-store", signal: ac.signal })
+  //     .then((r) => (r.ok ? r.json() : null))
+  //     .then((doc: SpotDoc | null) => setSpot(doc))
+  //     .catch((err) => {
+  //       if (err?.name !== "AbortError") console.error("spot fetch error:", err);
+  //       setSpot(null);
+  //     })
+  //     .finally(() => setSpotLoading(false));
 
-    return () => ac.abort();
-  }, []);
+  //   return () => ac.abort();
+  // }, []);
 
+  const [spot] = useState<SpotDoc | null>(spotInitial);
+  const [spotLoading] = useState<boolean>(!Boolean(spotInitial));
   const goldEurPerG = spot?.gold_eur_per_g ?? null;
   const silverEurPerG = spot?.silver_eur_per_g ?? null;
   const goldEurPerOz = goldEurPerG != null ? goldEurPerG * OZ_TO_G : null;
