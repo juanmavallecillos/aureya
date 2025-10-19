@@ -2,12 +2,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useDealerMeta, type DealerMeta } from "@/lib/useDealerMeta";
-import { cdnUrl } from "@/lib/cdn";
+import type { DealerMeta } from "@/lib/useDealerMeta";
 
 // 🆕 componentes desacoplados
 import FiltersBarCompact from "@/components/table/FiltersBarCompact";
-import FiltersBar from "@/components/table/FiltersBar";
 import TopActions from "@/components/table/TopActions";
 import InfoBarSpot from "@/components/table/InfoBarSpot";
 import PaginationControls from "@/components/table/PaginationControls";
@@ -19,8 +17,7 @@ import OffersRow from "@/components/table/OffersRow";
 import OfferMobileCard from "@/components/table/OfferMobileCard";
 import InfoBarSpotCompact from "@/components/table/InfoBarSpotCompact";
 
-// 🆕 util
-import { timeAgo } from "@/lib/format";
+
 
 /* ---------- Tipos ---------- */
 export type Offer = {
@@ -197,7 +194,7 @@ function premiumClass(pct: unknown) {
 
 /* ---------- Main ---------- */
 export type AllIndexProps = {
-  dealerMeta?: DealerMeta;
+  dealerMeta: DealerMeta;
   spotInitial?: SpotDoc | null;
   offersInitial?: Offer[];
   indexUpdatedAtInitial?: string | null;
@@ -257,15 +254,15 @@ export default function AllIndexTable({
   const [pageSize, setPageSize] = useState<number>(10);
   const [page, setPage] = useState<number>(1);
 
-  const dealerMeta = dealerMetaFromServer ?? useDealerMeta(null, false);
+  const dealerMeta = dealerMetaFromServer;
 
-  useEffect(() => {
-    const norm = normalizeOffers(offersInitial || []);
-    const out  = dedupeMode === "none" ? norm : dedupeByKey(norm);
-    // setOffers(out);
-    // setIndexUpdatedAt(indexUpdatedAtInitial ?? null);
-    // setLoading(false);
-  }, [offersInitial, indexUpdatedAtInitial, dedupeMode]);
+  // useEffect(() => {
+  //   const norm = normalizeOffers(offersInitial || []);
+  //   const out  = dedupeMode === "none" ? norm : dedupeByKey(norm);
+  //   // setOffers(out);
+  //   // setIndexUpdatedAt(indexUpdatedAtInitial ?? null);
+  //   // setLoading(false);
+  // }, [offersInitial, indexUpdatedAtInitial, dedupeMode]);
 
   // /* ---------- Carga índice ---------- */
   // useEffect(() => {

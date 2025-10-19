@@ -2,7 +2,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import AllIndexTable from "@/components/AllIndexTable.server";
-import { fetchJsonServer as fetchJson } from "@/lib/cdn-server";
+import { fetchJsonOrNullServer as fetchJsonOrNull } from "@/lib/cdn-server";
 
 /* ---------------- Normalización de segmentos ---------------- */
 const toMetalToken = (m?: string) => {
@@ -47,13 +47,20 @@ async function isValidBucket(
   form: "bar" | "coin",
   bucket: string
 ) {
-  const doc = await fetchJson<AllIndexDoc>("/prices/index/all_offers.json"); // vía proxy /api/cdn
-  const offers = Array.isArray(doc?.offers) ? doc!.offers! : [];
+  // ✅ CDN directo con ISR largo y TAG para revalidar por webhook
+  const doc = await fetchJsonOrNull<AllIndexDoc>("prices/index/all_offers.json", {
+    revalidate: 7200,                // 2h (se invalida por tag "all_offers")
+    tags: ["all_offers"],
+    // timeoutMs: 5000,              // (opcional; el helper ya trae timeout defensivo)
+  });
+
+  if (!doc?.offers?.length) return false; // si el CDN falla, no reventamos
+  const offers = doc.offers;
 
   const set = new Set<string>();
   for (const o of offers) {
-    const m = toMetalToken(o.metal); // <-- normalizamos "oro"/"gold"
-    const f = toFormToken(o.form); // <-- normalizamos "lingotes"/"bar"
+    const m = toMetalToken(o.metal);
+    const f = toFormToken(o.form);
     if (m === metal && f === form) {
       const b = bucketFromWeight(Number(o.weight_g));
       set.add(b);
@@ -82,7 +89,7 @@ export async function generateMetadata(
 
   // Validación también en metadata para no mostrar títulos erróneos
   if (!metal || !form || !bucket) return notFoundMeta();
-  const ok = await isValidBucket(metal, form, bucket);
+  const ok = await isValidBucket(metal, form, bucket); // ← dedupe de Next si se llama igual en la página
   if (!ok) return notFoundMeta();
 
   const h1Metal = niceMetal[metal];
@@ -94,7 +101,6 @@ export async function generateMetadata(
     title,
     description,
     openGraph: { title, description },
-    twitter: { card: "summary", title, description },
   };
 }
 
@@ -110,7 +116,7 @@ export default async function CategoryBucketPage(
 
   // Validación estricta
   if (!metal || !form || !bucket) notFound();
-  const ok = await isValidBucket(metal, form, bucket);
+  const ok = await isValidBucket(metal, form, bucket); // usa el mismo fetch (dedupe)
   if (!ok) notFound();
 
   const h1Metal = niceMetal[metal];
@@ -139,10 +145,7 @@ export default async function CategoryBucketPage(
       <section
         aria-label="Resumen SEO"
         className="mt-3 mb-3 rounded-lg pl-4 pr-3 py-3"
-        style={{
-          borderLeft: "4px solid hsl(var(--brand))",
-          background: "hsl(var(--brand) / 0.05)",
-        }}
+        style={{ borderLeft: "4px solid hsl(var(--brand))", background: "hsl(var(--brand) / 0.05)" }}
       >
         <p className="mt-1 text-sm text-zinc-700">
           Comparamos precios totales y calculamos la prima frente al spot en tiempo casi real.
@@ -162,7 +165,7 @@ export default async function CategoryBucketPage(
           <AllIndexTable
             forceMetal={metal}
             forceForm={form}
-            forceBuckets={[bucket]} // único bucket
+            forceBuckets={[bucket]}
             hideMetalFacet
             hideFormFacet
             hideBucketFacet

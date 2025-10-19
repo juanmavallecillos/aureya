@@ -6,7 +6,7 @@ import { getFaq, faqToJsonLd } from "@/lib/faqData";
 export const revalidate = 300;
 
 export default async function HomePage() {
-  const manifest = await fetchJsonOrNullServer<any>("prices/index/manifest.json", { revalidate: 300 });
+  const manifest = await fetchJsonOrNullServer<any>("prices/index/manifest.json", { revalidate: 7200, tags: ["manifest"] });
 
   if (!manifest) {
     return (

@@ -6,13 +6,11 @@ import PriceChart from "@/components/PriceChart";
 import VerifiedBadge from "@/components/VerifiedBadge";
 import ProductGallery from "@/components/ProductGallery";
 import {
-  fetchJsonServer as fetchJson,
-  fetchJsonOrNullServer as fetchJsonOrnull,
+  fetchJsonOrNullServer as fetchJsonOrNull,
   cdnPath,
 } from "@/lib/cdn-server";
 import { productSlug, extractSkuFromSlugParam } from "@/lib/slug";
 import SkuOffersTable from "@/components/SkuOffersTable";
-import { fetchSkuImages } from "@/lib/skuMedia";
 
 export const revalidate = 60;
 
@@ -168,12 +166,14 @@ export async function generateMetadata(
   const { slug } = await params;
   const sku = extractSkuFromSlugParam(slug);
 
-  const data = await fetchJson<SkuDoc>(`/prices/sku/${sku}.json`).catch(() => null);
+  const data = await fetchJsonOrNull<SkuDoc>(`/prices/sku/${sku}.json`, {
+    revalidate: 7200,
+    tags: [`sku:${sku}`],
+  });
   const meta = data?.meta;
   if (!meta) return { title: sku };
 
   const name = displayName(meta);
-  const weight = Math.max(1, Math.round(Number(meta.weight_g || 0)));
   const title = `${titleName(meta)} · ${weightLabel(meta.weight_g)}`;
 
   const prettySlug = productSlug({
@@ -190,10 +190,10 @@ export async function generateMetadata(
 
   return {
     title,
-    description: `Mejores ofertas, prima y evolución de precio para ${name} (${weight} g). Datos actualizados y tiendas verificadas.`,
+    description: `Mejores ofertas, prima y evolución de precio para ${name} (${weightLabel(meta.weight_g)}). Datos actualizados y tiendas verificadas.`,
     alternates: { canonical },
     openGraph: { url: canonical, title, type: "website" },
-    twitter: { card: "summary_large_image", title, description: `Mejores ofertas de ${name} (${weight} g).` },
+    twitter: { card: "summary_large_image", title, description: `Mejores ofertas de ${name} (${weightLabel(meta.weight_g)}).` },
     robots: { index: true, follow: true, googleBot: { index: true, follow: true, "max-image-preview": "large" } },
   };
 }
@@ -208,7 +208,10 @@ export default async function ProductPage(
   const sku = extractSkuFromSlugParam(slug);
 
   // 1) Datos por SKU
-  const data = await fetchJson<SkuDoc>(`/prices/sku/${sku}.json`).catch(() => null);
+  const data = await fetchJsonOrNull<SkuDoc>(`/prices/sku/${sku}.json`, {
+    revalidate: 7200,
+    tags: [`sku:${sku}`],
+  });
   if (!data?.meta) redirect("/");
 
   // 2) Slug canónico (redirect si no coincide)
@@ -226,14 +229,17 @@ export default async function ProductPage(
   }
 
   // 3) Histórico
-  const history = await fetchJson<HistDoc>(`/history/${sku}.json`, { revalidate: 3600 }).catch(
-    () => ({ sku, series: [] })
-  );
+  const history = await fetchJsonOrNull<HistDoc>(`/history/${sku}.json`, {
+    revalidate: 43200,           // 12 h
+    tags: [`history:${sku}`],
+  }).catch(() => ({ sku, series: [] as HistDoc["series"] })) ?? { sku, series: [] };
 
   // 4) Dealers
-  const dealers = await fetchJson<DealersMap>("/meta/dealers.json", { revalidate: 21600 }).catch(
-    () => ({} as DealersMap)
-  );
+  const dealers = await fetchJsonOrNull<DealersMap>("/meta/dealers.json", {
+    revalidate: 86400,           // 24 h
+    tags: ["dealers"],
+  }).catch(() => ({} as DealersMap)) ?? ({} as DealersMap);
+
   const getDealerLabel = (id: string) => dealers?.[id]?.label || id;
   const isDealerVerified = (id: string) => !!dealers?.[id]?.verified;
 
@@ -243,25 +249,31 @@ export default async function ProductPage(
     : [];
   const best = [...offers].sort((a, b) => Number(a.total_eur) - Number(b.total_eur))[0] || null;
 
-  // 6) Derivados de la ficha (no usamos fetch en cliente para spot)
+  // 6) Derivados de la ficha
   const updatedAt = data?.updated_at ? new Date(data.updated_at) : null;
   const updatedStr = updatedAt
     ? updatedAt.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })
     : "—";
 
-  // 7) Spot GLOBAL (desde CDN, en servidor) → se pasa a la tabla como prop
-  const spot = await fetchJsonOrnull<SpotDoc>("meta/spot.json", { revalidate: 120 });
+  // 7) Spot GLOBAL (servidor) → prop a la tabla
+  const spot = await fetchJsonOrNull<SpotDoc>("meta/spot.json", {
+    revalidate: 7200,            // 2 h
+    tags: ["spot"],
+  });
 
   /* 8) GALERÍA */
-  const mediaIdx = await fetchJson<MediaIndex>("media/index.json", { revalidate: 300 }).catch(
-    () => ({} as MediaIndex)
-  );
+  const mediaIdx = await fetchJsonOrNull<MediaIndex>("media/index.json", {
+    revalidate: 7200,            // 2 h
+    tags: ["media_index"],
+  }) ?? ({} as MediaIndex);
+
   const rawPaths = Array.isArray(mediaIdx?.[data.sku]) ? mediaIdx[data.sku] : [];
   const preferred = selectPreferredImages(rawPaths);
-  const galleryImages: string[] = preferred.slice(0, 4);
-  const jsonImages = galleryImages.length
+  const galleryImages: string[] = preferred.slice(0, 4); // paths crudos; ProductGallery los convierte a CDN
+  const jsonImagesAbs = (galleryImages.length
     ? galleryImages
-    : (data.images && data.images.length ? data.images : data.image ? [data.image] : []);
+    : (data.images?.length ? data.images : (data.image ? [data.image] : []))
+  ).map(p => cdnPath(p)); // URLs absolutas/proxy para JSON-LD
 
   return (
     <main className="mx-auto max-w-6xl px-4 pb-16">
@@ -422,8 +434,6 @@ export default async function ProductPage(
       {(() => {
         const base = (process.env.NEXT_PUBLIC_SITE_URL || "").replace(/\/+$/, "");
         const productUrl = base ? `${base}/producto/${canonicalSlug}` : undefined;
-        const jsonImagesAbs = (galleryImages.length ? galleryImages : (data.images?.length ? data.images : (data.image ? [data.image] : [])))
-          .map(p => cdnPath(p));
         const jsonLd: Record<string, any> = {
           "@context": "https://schema.org",
           "@type": "Product",
@@ -432,7 +442,7 @@ export default async function ProductPage(
           brand: data.meta.brand ? { "@type": "Brand", name: data.meta.brand } : undefined,
           category: `${data.meta.metal}/${data.meta.form}`,
           url: productUrl,
-          ...(jsonImages && jsonImages.length ? { image: jsonImages } : {}),
+          ...(jsonImagesAbs.length ? { image: jsonImagesAbs } : {}),
           offers: offers.length
             ? {
                 "@type": "AggregateOffer",

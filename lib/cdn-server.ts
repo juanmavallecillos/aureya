@@ -17,26 +17,20 @@ function cdnUrl(pathOrUrl: string): string {
 }
 
 /** Fetch directo al CDN (sin proxy /api/cdn) y compatible con ISR. */
-async function fetchFromCdn(pathOrUrl: string, opts: { revalidate?: number } = {}) {
-  const url = cdnUrl(pathOrUrl);
+async function fetchFromCdn(path: string, opts: FetchOpts = {}) {
+  const init: RequestInit = (opts.revalidate != null || opts.tags?.length)
+    ? ({ next: { revalidate: opts.revalidate, tags: opts.tags } } as any)
+    : { cache: "no-store" };
 
-  // Importante: no mezclar cache:'no-store' con next:{ revalidate }.
-  // Si se pasa revalidate, dejamos que Next gestione el cacheo ISR.
-  // Si no, no seteamos nada y hereda la política a nivel de página.
-  const init: RequestInit = {};
-  if (typeof opts.revalidate === "number") {
-    (init as any).next = { revalidate: opts.revalidate };
-  }
-
-  const res = await fetch(url, init);
-  return res;
+  const url = cdnUrl(path); // usa https://cdn.aureya.es/...
+  return fetch(url, init);
 }
 
 /* =================================================================================
  * API pública (mantenemos nombres y tipos para evitar cambios en el resto del código)
  * ================================================================================= */
 
-type FetchOpts = { revalidate?: number };
+type FetchOpts = { revalidate?: number; tags?: string[] };
 
 export async function fetchJsonServer<T>(path: string, opts: FetchOpts = {}): Promise<T> {
   const res = await fetchFromCdn(path, opts);
@@ -84,3 +78,4 @@ export function toAbsolute(url: string) {
     "http://127.0.0.1:3000";
   return new URL(url, base).toString();
 }
+
