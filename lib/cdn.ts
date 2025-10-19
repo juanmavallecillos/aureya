@@ -21,10 +21,10 @@ export function toAbsolute(url: string) {
   // En cliente, devolvemos tal cual (Next resuelve relativo).
   if (typeof window !== "undefined") return url;
   // En SSR, resolvemos contra SITE_URL/VERCEL_URL o localhost.
-  const base =
-    (process.env.NEXT_PUBLIC_SITE_URL && process.env.NEXT_PUBLIC_SITE_URL.replace(/\/+$/, "")) ||
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
-    "http://127.0.0.1:3000";
+  const base = process.env.NEXT_PUBLIC_CDN_BASE;
+    // (process.env.NEXT_PUBLIC_SITE_URL && process.env.NEXT_PUBLIC_SITE_URL.replace(/\/+$/, "")) ||
+    // (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
+    // "http://127.0.0.1:3000";
   return new URL(url, base).toString();
 }
 
