@@ -1,12 +1,12 @@
+// app/tiendas/page.tsx
 import DealerCard from "@/components/DealerCard";
 import MicroFAQ from "@/components/MicroFAQ";
-// import { fetchJsonOrNullServer as fetchJsonOrNull } from "@/lib/cdn-server";
 import { fetchJsonOrNullServer as fetchJsonOrNull } from "@/lib/cdn-server";
 import type { DealerMeta } from "@/lib/useDealerMeta";
 import { getFaq, faqToJsonLd } from "@/lib/faqData";
 import type { Metadata } from "next";
 
-type Offer = { dealer_id: string; metal: string; form: string };
+type Offer = { dealer_id: string; metal?: string; form?: string };
 
 export const revalidate = 300;
 
@@ -23,31 +23,45 @@ export const metadata: Metadata = {
   twitter: { card: "summary" },
 };
 
-export default async function TiendasPage() {
-  // 1) Metadatos de tiendas
-  const dealersMeta = await fetchJsonOrNull<DealerMeta>("/meta/dealers.json");
+// normalizaciones consistentes con el resto de la app
+const toMetalToken = (m?: string) => {
+  const x = (m || "").toLowerCase();
+  if (x === "oro") return "gold";
+  if (x === "plata") return "silver";
+  return x;
+};
+const toFormToken = (f?: string) => {
+  const x = (f || "").toLowerCase();
+  if (x === "lingote" || x === "lingotes" || x === "bar") return "bar";
+  if (x === "moneda" || x === "monedas" || x === "coin") return "coin";
+  return x;
+};
 
-  // 2) Índice de ofertas
-  const allOffers = await fetchJsonOrNull<{ offers: Offer[] }>(
-    "/prices/index/all_offers.json"
-  ).catch(() => ({ offers: [] }));
-  const offers = Array.isArray(allOffers?.offers) ? allOffers.offers : [];
+export default async function TiendasPage() {
+  // 1) Metadatos de tiendas (defensa: {} si falla)
+  const dealersMeta = (await fetchJsonOrNull<DealerMeta>("/meta/dealers.json")) ?? {};
+
+  // 2) Índice de ofertas (defensa: [] si falla)
+  const allOffers =
+    (await fetchJsonOrNull<{ offers: Offer[] }>("/prices/index/all_offers.json")) ?? { offers: [] };
+  const offers = Array.isArray(allOffers.offers) ? allOffers.offers : [];
 
   // 3) Agrupar por dealer_id
   type Agg = { offersCount: number; metals: Set<string>; forms: Set<string> };
   const agg: Record<string, Agg> = {};
   for (const o of offers) {
-    const id = o.dealer_id;
+    const id = o?.dealer_id?.toLowerCase?.() || o?.dealer_id || "";
     if (!id) continue;
     if (!agg[id]) agg[id] = { offersCount: 0, metals: new Set(), forms: new Set() };
     agg[id].offersCount++;
-    if (o.metal) agg[id].metals.add(o.metal.toLowerCase());
-    if (o.form) agg[id].forms.add(o.form.toLowerCase());
+    if (o.metal) agg[id].metals.add(toMetalToken(o.metal));
+    if (o.form) agg[id].forms.add(toFormToken(o.form));
   }
 
-  // 4) Generar tarjetas SOLO para tiendas presentes en dealers.json
-  const cards = Object.entries(dealersMeta || {})
-    .map(([slug, meta]) => {
+  // 4) Tarjetas SOLO para tiendas presentes en dealers.json
+  const cards = Object.entries(dealersMeta)
+    .map(([slugRaw, meta]) => {
+      const slug = slugRaw.toLowerCase();
       const a = agg[slug];
       return {
         slug,
@@ -65,12 +79,12 @@ export default async function TiendasPage() {
     itemListElement: cards.map((c, i) => ({
       "@type": "ListItem",
       position: i + 1,
-      url: `/${"tiendas"}/${c.slug}`,
+      url: `/tiendas/${c.slug}`,
       name: c.meta.label,
     })),
   };
 
-  // FAQ de la sección
+  // FAQ
   const faqItems = getFaq("tiendas");
   const faqLd = faqToJsonLd(faqItems);
 
@@ -87,7 +101,7 @@ export default async function TiendasPage() {
       </header>
       <div className="mt-4 h-px w-full bg-gradient-to-r from-transparent via-[hsl(var(--brand))] to-transparent" />
 
-      {/* SEO breve (5–6 líneas) */}
+      {/* SEO breve */}
       <section
         aria-label="Resumen SEO"
         className="mt-3 mb-3 rounded-lg pl-4 pr-3 py-3"
@@ -96,33 +110,15 @@ export default async function TiendasPage() {
           background: "hsl(var(--brand) / 0.05)",
         }}
       >
-        {/* <h2 className="text-lg md:text-xl font-semibold text-zinc-900">
-          Tiendas verificadas de oro y plata en España y Europa
-        </h2> */}
-
         <p className="mt-1 text-sm text-zinc-700">
           En Aureya centralizamos ofertas públicas de casas y mayoristas de metales preciosos.
           Mostramos <strong>precio final</strong> y <strong>prima frente al <em>spot</em></strong> para
           comparar de forma homogénea entre tiendas verificadas.
         </p>
-
         <p className="mt-2 text-sm text-zinc-700">
           Servimos vía CDN para cargas rápidas. Consulta condiciones de envío y pago en cada ficha
           de tienda.
         </p>
-
-        {/* Enlaces rápidos (opcional) */}
-        {/* <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-sm">
-          <a href="/oro/lingotes/1oz"   className="underline decoration-[hsl(var(--brand))] underline-offset-2 hover:text-zinc-900">Lingote de oro 1&nbsp;oz</a>
-          <span aria-hidden className="text-zinc-400">•</span>
-          <a href="/oro/lingotes/100g"  className="underline decoration-[hsl(var(--brand))] underline-offset-2 hover:text-zinc-900">Lingote de oro 100&nbsp;g</a>
-          <span aria-hidden className="text-zinc-400">•</span>
-          <a href="/plata/monedas/1oz"  className="underline decoration-[hsl(var(--brand))] underline-offset-2 hover:text-zinc-900">Monedas de plata 1&nbsp;oz</a>
-        </div> */}
-
-        {/* <p className="mt-2 text-xs text-zinc-500">
-          Nota: la prima se calcula sin incluir envío. No es asesoramiento financiero.
-        </p> */}
       </section>
 
       {/* GRID de tiendas */}
@@ -161,10 +157,9 @@ export default async function TiendasPage() {
         .
       </p>
 
-      {/* FAQ de la sección */}
+      {/* FAQ */}
       <section className="mx-auto max-w-[68ch] pb-14 pt-10">
         <MicroFAQ items={faqItems} />
-        {/* FAQ JSON-LD */}
         <script
           type="application/ld+json"
           // @ts-ignore JSON string para el DOM
@@ -172,8 +167,7 @@ export default async function TiendasPage() {
         />
       </section>
 
-
-      {/* JSON-LD */}
+      {/* JSON-LD ItemList */}
       <script
         type="application/ld+json"
         // @ts-ignore: JSON string expected by the DOM
