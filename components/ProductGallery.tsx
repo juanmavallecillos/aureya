@@ -54,7 +54,7 @@ export default function ProductGallery({ images, altBase, className }: Props) {
       <div
         className={clsx(
           // Contenedor estable y centrado
-          "relative w-full overflow-hidden rounded-xl shadow-sm bg-white",
+          "relative w-full overflow-hidden rounded-xl bg-white",
           // Altura estable por relación de aspecto; no se moverá al hacer scroll
           "aspect-[4/3] md:aspect-[3/4]",
           // Centrado perfecto del contenido

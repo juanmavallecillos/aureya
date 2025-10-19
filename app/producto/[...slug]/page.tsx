@@ -12,7 +12,7 @@ import {
 } from "@/lib/cdn-server";
 import { productSlug, extractSkuFromSlugParam } from "@/lib/slug";
 import SkuOffersTable from "@/components/SkuOffersTable";
-import InfoBarSpot from "@/components/table/InfoBarSpot";
+import { fetchSkuImages } from "@/lib/skuMedia";
 
 export const revalidate = 60;
 

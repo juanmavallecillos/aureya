@@ -141,12 +141,14 @@ function DesktopMegaDropdown({
    ========================= */
 function MobileAccordionGroup({
   label,
+  href,
   groups,
   openByDefault,
   isActive,
   onNavigate,
 }: {
   label: string;
+  href?: string;
   groups: MenuGroup[];
   openByDefault?: boolean;
   isActive: (p: string) => boolean;
@@ -156,17 +158,18 @@ function MobileAccordionGroup({
   const toggle = () => setOpen((o) => !o);
 
   const anyChildActive =
-    groups.some((g) => isActive(g.baseHref) || g.items.some((it) => isActive(it.href)));
+    groups.some((g) => isActive(g.baseHref) || g.items.some((it) => isActive(it.href))) ||
+    (href ? isActive(href) : false);
 
   return (
     <div>
       <div className="flex items-center justify-between">
-        <button
-          onClick={() => {
-            onNavigate(); // Navega al índice de “Metales” si lo decides más adelante (/metales). Por ahora sólo despliega.
-          }}
+        {/* Título con enlace a /metales */}
+        <Link
+          href={href ?? "#"}
+          onClick={onNavigate}
           className={[
-            "block rounded-lg px-3 py-2 text-left",
+            "block rounded-lg px-3 py-2",
             anyChildActive
               ? "bg-[hsl(var(--brand)/0.10)] text-[hsl(var(--brand))] font-medium"
               : "hover:bg-zinc-50",
@@ -174,7 +177,9 @@ function MobileAccordionGroup({
           aria-label={label}
         >
           {label}
-        </button>
+        </Link>
+
+        {/* Chevron para abrir/cerrar el acordeón */}
         <button
           onClick={toggle}
           className="rounded p-2 hover:bg-zinc-100"
@@ -204,7 +209,6 @@ function MobileAccordionGroup({
           <div className="px-3 pb-2 pt-1 space-y-3">
             {groups.map((g) => (
               <div key={g.baseHref}>
-                {/* Título de grupo (enlace al índice del metal) */}
                 <Link
                   href={g.baseHref}
                   onClick={onNavigate}
@@ -221,7 +225,6 @@ function MobileAccordionGroup({
                   </svg>
                 </Link>
 
-                {/* Chips de items */}
                 <div className="mt-2 flex flex-wrap gap-2">
                   {g.items.map((it) => (
                     <Link
@@ -266,7 +269,7 @@ export default function SiteHeader() {
 
   const inicioActive = isActive("/");
   const tiendasActive = isActive("/tiendas");
-  const metalesActive = isActive("/oro") || isActive("/plata");
+  const metalesActive = isActive("/oro") || isActive("/plata") || isActive("/metales");
   const aboutActive = isActive("/sobre-nosotros");
   const contActive = isActive("/contacto");
 
@@ -360,7 +363,7 @@ export default function SiteHeader() {
           {/* METALES (mega dropdown) */}
           <DesktopMegaDropdown
             label="Metales"
-            href="/oro" // o una futura /metales si la creas
+            href="/metales"
             active={!!metalesActive}
             groups={metalGroups}
           />
@@ -473,6 +476,7 @@ export default function SiteHeader() {
               {/* METALES (acordeón agrupado) */}
               <MobileAccordionGroup
                 label="Metales"
+                href="/metales"
                 groups={metalGroups}
                 openByDefault={isActive("/oro") || isActive("/plata")}
                 isActive={isActive}
