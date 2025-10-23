@@ -38,13 +38,21 @@ const toFormToken = (f?: string) => {
 };
 
 export default async function TiendasPage() {
-  // 1) Metadatos de tiendas (defensa: {} si falla)
-  const dealersMeta = (await fetchJsonOrNull<DealerMeta>("/meta/dealers.json")) ?? {};
+  // 1) Metadatos de tiendas
+  const dealersMeta =
+    (await fetchJsonOrNull<DealerMeta>("meta/dealers.json", {
+      revalidate: 300,                 // 5 min
+      tags: ["dealers"],
+    })) ?? {};
 
-  // 2) Índice de ofertas (defensa: [] si falla)
-  const allOffers =
-    (await fetchJsonOrNull<{ offers: Offer[] }>("/prices/index/all_offers.json")) ?? { offers: [] };
-  const offers = Array.isArray(allOffers.offers) ? allOffers.offers : [];
+  // 2) Índice global de ofertas
+  const allOffersDoc =
+    (await fetchJsonOrNull<{ offers: Offer[] }>("prices/index/all_offers.json", {
+      revalidate: 300,                 // 5 min
+      tags: ["all_offers"],
+    })) ?? { offers: [] };
+
+  const offers = Array.isArray(allOffersDoc.offers) ? allOffersDoc.offers : [];
 
   // 3) Agrupar por dealer_id
   type Agg = { offersCount: number; metals: Set<string>; forms: Set<string> };
