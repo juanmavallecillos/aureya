@@ -14,6 +14,7 @@ const BYPASS = [
   "^/assets($|/)",
   "^/.*\\.(?:png|jpe?g|webp|avif|svg|ico|css|js|txt|map)$",
   "^/api/unlock($|/)", // opcional si usas el endpoint
+  "^/api/revalidate($|/)",
 ];
 
 function isBypassed(pathname: string) {
