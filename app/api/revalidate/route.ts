@@ -12,3 +12,13 @@ export async function POST(req: NextRequest) {
   for (const t of tags) revalidateTag(t);
   return NextResponse.json({ ok: true, revalidated: tags });
 }
+
+// (opcional: GET solo para debug manual)
+export async function GET(req: NextRequest) {
+  const secret = req.nextUrl.searchParams.get("secret");
+  return NextResponse.json({
+    ok: secret === process.env.REVALIDATE_SECRET,
+    expected: process.env.REVALIDATE_SECRET,
+    received: secret,
+  });
+}
