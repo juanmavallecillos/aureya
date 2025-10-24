@@ -71,7 +71,8 @@ export default async function HomePage() {
 
         {/* Tabla principal (mismo contenedor y ancho que el resto) */}
         <section className="mb-8">
-          <AllIndexTable manifest={manifest} />
+          <AllIndexTable/>
+          {/* <AllIndexTable manifest={manifest} /> */}
         </section>
       </div>
 

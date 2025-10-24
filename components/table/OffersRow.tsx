@@ -28,12 +28,71 @@ export type Offer = {
 const niceMetal: Record<string, string> = { gold: "Oro", silver: "Plata", platinum: "Platino", palladium: "Paladio" };
 const niceForm: Record<string, string> = { bar: "Lingote", coin: "Moneda" };
 
-const bucketFromWeight = (weight_g: unknown) => {
+const OZ_TO_G = 31.1034768;
+
+const BUCKETS_ORDER: string[] = [
+  "2g",
+  "2,5g",
+  "5g",
+  "1/4oz",
+  "10g",
+  "1/2oz",
+  "20g",
+  "25g",
+  "1oz",
+  "50g",
+  "100g",
+  "250g",
+  "500g",
+  "1kg",
+];
+
+const BUCKET_TARGET_G: Record<string, number> = {
+  "2g": 2,
+  "2,5g": 2.5,
+  "5g": 5,
+  "1/4oz": OZ_TO_G / 4,   // ~7.776 g
+  "10g": 10,
+  "1/2oz": OZ_TO_G / 2,   // ~15.552 g
+  "20g": 20,
+  "25g": 25,
+  "1oz": OZ_TO_G,         // ~31.103 g
+  "50g": 50,
+  "100g": 100,
+  "250g": 250,
+  "500g": 500,
+  "1kg": 1000,
+};
+
+const TOL_G: Record<string, number> = {
+  "2g": 0.2,
+  "2,5g": 0.2,
+  "5g": 0.3,
+  "1/4oz": 0.25,
+  "10g": 0.4,
+  "1/2oz": 0.4,
+  "20g": 0.6,
+  "25g": 0.6,
+  "1oz": 0.6,
+  "50g": 1.0,
+  "100g": 2.0,
+  "250g": 3.0,
+  "500g": 5.0,
+  "1kg": 8.0,
+};
+
+export const bucketFromWeight = (weight_g: unknown): string => {
   const w = Number(weight_g);
-  if (!Number.isFinite(w)) return "—";
-  if (Math.abs(w - 31.1035) < 0.05) return "1oz";
-  const specials = [1, 2, 2.5, 5, 10, 20, 50, 100, 250, 500, 1000];
-  for (const s of specials) if (Math.abs(w - s) < 0.2) return `${s}g`;
+  if (!Number.isFinite(w) || w <= 0) return "—";
+
+  // 1) Intento exacto contra la lista fija en este orden
+  for (const label of BUCKETS_ORDER) {
+    const target = BUCKET_TARGET_G[label];
+    const tol = TOL_G[label] ?? 0.5;
+    if (Math.abs(w - target) <= tol) return label;
+  }
+
+  // 2) Fallback: devolver gramos redondeados
   return `${Math.round(w)}g`;
 };
 
