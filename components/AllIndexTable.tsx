@@ -1,23 +1,16 @@
-// components/AllIndexTable.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
 import type { DealerMeta } from "@/lib/useDealerMeta";
 
-// 🆕 componentes desacoplados
 import FiltersBarCompact from "@/components/table/FiltersBarCompact";
 import TopActions from "@/components/table/TopActions";
 import InfoBarSpot from "@/components/table/InfoBarSpot";
 import PaginationControls from "@/components/table/PaginationControls";
-import SortableTh, {
-  type SortKey,
-  type SortDir,
-} from "@/components/table/SortableTh";
+import SortableTh, { type SortKey, type SortDir } from "@/components/table/SortableTh";
 import OffersRow from "@/components/table/OffersRow";
 import OfferMobileCard from "@/components/table/OfferMobileCard";
 import InfoBarSpotCompact from "@/components/table/InfoBarSpotCompact";
-
-
 
 /* ---------- Tipos ---------- */
 export type Offer = {
@@ -36,6 +29,8 @@ export type Offer = {
   premium_ex_ship_pct?: number | null;
   buy_url?: string | null;
   updated_at?: string | null;
+  // puede venir del backend/scraper
+  bucket_label?: string | null;
 };
 type AllOffersDoc = { updated_at: string; offers: Offer[] };
 
@@ -54,13 +49,62 @@ export type SpotDoc = {
 /* ---------- Const ---------- */
 const OZ_TO_G = 31.1034768;
 
-/* ---------- Helpers formato (puedes moverlos a lib/format si quieres) ---------- */
+// Lista fija tal cual quieres mostrarla
+const FIXED_BUCKETS = [
+  "2g",
+  "2,5g",
+  "5g",
+  "1/4oz",
+  "10g",
+  "1/2oz",
+  "20g",
+  "25g",
+  "1oz",
+  "50g",
+  "100g",
+  "250g",
+  "500g",
+  "1kg",
+] as const;
+type FixedBucket = (typeof FIXED_BUCKETS)[number];
+
+const BUCKET_TARGET_G: Record<FixedBucket, number> = {
+  "2g": 2,
+  "2,5g": 2.5,
+  "5g": 5,
+  "1/4oz": OZ_TO_G / 4,
+  "10g": 10,
+  "1/2oz": OZ_TO_G / 2,
+  "20g": 20,
+  "25g": 25,
+  "1oz": OZ_TO_G,
+  "50g": 50,
+  "100g": 100,
+  "250g": 250,
+  "500g": 500,
+  "1kg": 1000,
+};
+const TOL_G: Record<FixedBucket, number> = {
+  "2g": 0.2,
+  "2,5g": 0.2,
+  "5g": 0.3,
+  "1/4oz": 0.25,
+  "10g": 0.4,
+  "1/2oz": 0.4,
+  "20g": 0.6,
+  "25g": 0.6,
+  "1oz": 0.6,
+  "50g": 1,
+  "100g": 2,
+  "250g": 3,
+  "500g": 5,
+  "1kg": 8,
+};
+
+/* ---------- Helpers formato ---------- */
 const fmtMoney = (v: unknown) =>
   Number.isFinite(Number(v))
-    ? new Intl.NumberFormat("es-ES", {
-        style: "currency",
-        currency: "EUR",
-      }).format(Number(v))
+    ? new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(Number(v))
     : "—";
 
 const dedupeByKey = (arr: Offer[]) => {
@@ -83,26 +127,16 @@ const normalizeOffers = (raw: Offer[]) =>
     form: toFormToken(o.form as any),
   }));
 
-// Calcula premium vs spot (€/g) usando los datos de meta/spot.json.
-// Si spot aún no está cargado, cae al premium del backend (ex envío si existe).
+// Premium vs spot
 function premiumFromSpot(o: Offer, spot: SpotDoc | null): number {
   const fallback = o.premium_ex_ship_pct ?? o.premium_pct ?? NaN;
   if (!spot || !o.price_eur || !o.weight_g) return fallback;
 
   const metal = (o.metal || "").toLowerCase();
-  const perG =
-    metal === "gold"
-      ? spot.gold_eur_per_g
-      : metal === "silver"
-      ? spot.silver_eur_per_g
-      : undefined;
-
+  const perG = metal === "gold" ? spot.gold_eur_per_g : metal === "silver" ? spot.silver_eur_per_g : undefined;
   if (!perG) return fallback;
 
-  // Si quieres incluir IVA para plata, cambia a: const basePerG = metal === "silver" ? perG * 1.21 : perG;
-  const basePerG = perG;
-
-  const intrinsic = o.weight_g * basePerG;
+  const intrinsic = o.weight_g * perG;
   if (!Number.isFinite(intrinsic) || intrinsic <= 0) return fallback;
 
   return ((Number(o.price_eur) - intrinsic) / intrinsic) * 100;
@@ -121,32 +155,49 @@ const toFormToken = (f?: string) => {
   if (x === "moneda" || x === "monedas" || x === "coin") return "coin";
   return x;
 };
-const niceMetal: Record<string, string> = {
-  gold: "Oro",
-  silver: "Plata",
-  platinum: "Platino",
-  palladium: "Paladio",
-};
+const niceMetal: Record<string, string> = { gold: "Oro", silver: "Plata", platinum: "Platino", palladium: "Paladio" };
 const niceForm: Record<string, string> = { bar: "Lingote", coin: "Moneda" };
 
-function bucketFromWeight(weight_g: unknown) {
+/* ---------- Buckets (fijos) ---------- */
+function bucketFromWeightFixed(weight_g: unknown): FixedBucket | string {
   const w = Number(weight_g);
-  if (!Number.isFinite(w)) return "—";
-  if (Math.abs(w - 31.1035) < 0.05) return "1oz";
-  const specials = [1, 2, 2.5, 5, 10, 20, 50, 100, 250, 500, 1000];
-  for (const s of specials) if (Math.abs(w - s) < 0.2) return `${s}g`;
+  if (!Number.isFinite(w) || w <= 0) return "—";
+  for (const label of FIXED_BUCKETS) {
+    const target = BUCKET_TARGET_G[label];
+    const tol = TOL_G[label];
+    if (Math.abs(w - target) <= tol) return label;
+  }
+  // fallback (no debería ocurrir con nuestros tamaños)
   return `${Math.round(w)}g`;
 }
-const bucketToGrams = (b: string): number => {
+function bucketToGramsFixed(b: string): number {
   if (!b) return NaN;
-  if (b === "1oz") return OZ_TO_G;
-  if (b.endsWith("g")) {
-    const n = Number(b.replace("g", ""));
+  if ((FIXED_BUCKETS as readonly string[]).includes(b)) {
+    return BUCKET_TARGET_G[b as FixedBucket];
+  }
+  // compat: "1000g"
+  if (/^\d+g$/i.test(b)) {
+    const n = Number(b.replace(/g$/i, ""));
     return Number.isFinite(n) ? n : NaN;
   }
-  const n = Number(b);
-  return Number.isFinite(n) ? n : NaN;
-};
+  // compat: "1oz", "1/2oz", etc.
+  if (/oz$/i.test(b)) {
+    const frac = b.replace(/oz$/i, "");
+    if (frac.includes("/")) {
+      const [num, den] = frac.split("/").map(Number);
+      if (Number.isFinite(num) && Number.isFinite(den) && den !== 0) return (num / den) * OZ_TO_G;
+    } else {
+      const n = Number(frac);
+      if (Number.isFinite(n)) return n * OZ_TO_G;
+    }
+  }
+  return NaN;
+}
+function bucketLabelOf(o: Offer): string {
+  const raw = (o as any).bucket_label as string | undefined;
+  if (raw && (FIXED_BUCKETS as readonly string[]).includes(raw)) return raw;
+  return String(bucketFromWeightFixed(o.weight_g));
+}
 
 /* ---------- Nombre a mostrar (Marca/Serie) ---------- */
 const tailFromSku = (sku: string) => {
@@ -154,18 +205,12 @@ const tailFromSku = (sku: string) => {
   return parts.length > 2 ? parts.slice(2).join(" ") : "";
 };
 const toTitle = (s: string) =>
-  s
-    .toLowerCase()
-    .replace(/[_\-]+/g, " ")
-    .replace(/\b([a-z])/g, (m) => m.toUpperCase());
-
+  s.toLowerCase().replace(/[_\-]+/g, " ").replace(/\b([a-z])/g, (m) => m.toUpperCase());
 function displayName(o: Offer): string {
   if (o.display_name) return o.display_name;
   const brand = (o.brand || "").trim();
   const series = (o.series || "").trim();
-
   if (series) return brand ? `${series} — ${brand}` : series;
-
   if (o.form === "coin") {
     const tail = toTitle(tailFromSku(o.sku));
     if (tail && brand) return `${tail} — ${brand}`;
@@ -180,8 +225,7 @@ function displayName(o: Offer): string {
 
 /* ---------- Orden ---------- */
 const nextDir = (d?: SortDir): SortDir => (d === "asc" ? "desc" : "asc");
-const sortLabel = (key: SortKey, dir: SortDir) =>
-  (key === "premium" ? "prem" : key) + (dir === "asc" ? "Asc" : "Desc");
+const sortLabel = (key: SortKey, dir: SortDir) => (key === "premium" ? "prem" : key) + (dir === "asc" ? "Asc" : "Desc");
 
 /* ---------- Colores premium ---------- */
 function premiumClass(pct: unknown) {
@@ -256,105 +300,6 @@ export default function AllIndexTable({
 
   const dealerMeta = dealerMetaFromServer;
 
-  // useEffect(() => {
-  //   const norm = normalizeOffers(offersInitial || []);
-  //   const out  = dedupeMode === "none" ? norm : dedupeByKey(norm);
-  //   // setOffers(out);
-  //   // setIndexUpdatedAt(indexUpdatedAtInitial ?? null);
-  //   // setLoading(false);
-  // }, [offersInitial, indexUpdatedAtInitial, dedupeMode]);
-
-  // /* ---------- Carga índice ---------- */
-  // useEffect(() => {
-  //   const ac = new AbortController();
-  //   setLoading(true);
-
-  //   const dedupeByKey = (arr: Offer[]) => {
-  //     const seen = new Set<string>();
-  //     const unique: Offer[] = [];
-  //     for (const o of arr) {
-  //       const idTail = o.buy_url ? o.buy_url : String(o.price_eur ?? "");
-  //       const key = `${o.sku}|${o.dealer_id}|${idTail}`;
-  //       if (seen.has(key)) continue;
-  //       seen.add(key);
-  //       unique.push(o);
-  //     }
-  //     return unique;
-  //   };
-
-  //   const load = async () => {
-  //     try {
-  //       // --- MODO FICHA (SKU): lee /prices/sku/{SKU}.json ---
-  //       if (forceSku) {
-  //         const url = cdnUrl(`prices/sku/${forceSku}.json`);
-  //         const r = await fetch(url, { signal: ac.signal, credentials: "omit", referrerPolicy: "no-referrer" });
-  //         if (!r.ok) throw new Error(`CDN ${r.status}`);
-
-  //         const doc: {
-  //           updated_at?: string;
-  //           updatedAt?: string;
-  //           offers?: Offer[];
-  //         } = await r.json();
-  //         setIndexUpdatedAt(doc?.updated_at || doc?.updatedAt || null);
-
-  //         const raw = Array.isArray(doc?.offers) ? doc.offers : [];
-  //         const norm = raw.map((o) => ({
-  //           ...o,
-  //           metal: toMetalToken(o.metal as any),
-  //           form: toFormToken(o.form as any),
-  //         }));
-
-  //         setOffers(dedupeMode === "none" ? norm : dedupeByKey(norm));
-  //         return;
-  //       }
-
-  //       // --- MODO ÍNDICE: lee /prices/index/all_offers.json ---
-  //       const url = cdnUrl("prices/index/all_offers.json");
-  //       const r = await fetch(url, { signal: ac.signal, credentials: "omit", referrerPolicy: "no-referrer" });
-  //       if (!r.ok) throw new Error(`CDN ${r.status}`);
-
-  //       const doc: AllOffersDoc = await r.json();
-  //       setIndexUpdatedAt(doc?.updated_at || null);
-
-  //       const raw = Array.isArray(doc?.offers) ? doc.offers : [];
-  //       const norm = raw.map((o) => ({
-  //         ...o,
-  //         metal: toMetalToken(o.metal),
-  //         form: toFormToken(o.form),
-  //       }));
-
-  //       setOffers(dedupeMode === "none" ? norm : dedupeByKey(norm));
-  //     } catch (err: any) {
-  //       if (err?.name !== "AbortError") {
-  //         console.error("all_offers fetch error:", err);
-  //       }
-  //     } finally {
-  //       setLoading(false);
-  //     }
-  //   };
-
-  //   load();
-  //   return () => ac.abort();
-  // }, [forceSku, dedupeMode]);
-
-  // /* ---------- Carga spot ---------- */
-  // useEffect(() => {
-  //   const ac = new AbortController();
-  //   const url = cdnUrl("meta/spot.json");
-
-  //   setSpotLoading(true);
-  //   fetch(url, { signal: ac.signal, credentials: "omit", referrerPolicy: "no-referrer" })
-  //     .then((r) => (r.ok ? r.json() : null))
-  //     .then((doc: SpotDoc | null) => setSpot(doc))
-  //     .catch((err) => {
-  //       if (err?.name !== "AbortError") console.error("spot fetch error:", err);
-  //       setSpot(null);
-  //     })
-  //     .finally(() => setSpotLoading(false));
-
-  //   return () => ac.abort();
-  // }, []);
-
   /* ---------- Derivados spot (€/oz) ---------- */
   const goldEurPerG = spot?.gold_eur_per_g ?? null;
   const silverEurPerG = spot?.silver_eur_per_g ?? null;
@@ -365,11 +310,8 @@ export default function AllIndexTable({
 
   /* ---------- Opciones de facetas ---------- */
   const metals = useMemo(() => {
-    if (manifest?.metals?.length)
-      return Array.from(new Set(manifest.metals.map(toMetalToken)));
-    return Array.from(
-      new Set(baseOffers.map((o) => o.metal).filter(Boolean))
-    ).sort();
+    if (manifest?.metals?.length) return Array.from(new Set(manifest.metals.map(toMetalToken)));
+    return Array.from(new Set(baseOffers.map((o) => o.metal).filter(Boolean))).sort();
   }, [baseOffers, manifest]);
 
   const forms = useMemo(() => {
@@ -380,38 +322,45 @@ export default function AllIndexTable({
   }, [baseOffers, manifest, forceForm]);
 
   const allBuckets = useMemo<string[]>(() => {
-    const base = manifest?.buckets?.length
-      ? [...manifest.buckets]
-      : Array.from(new Set(baseOffers.map((o) => bucketFromWeight(o.weight_g))));
-    base.sort((a, b) => {
-      const ga = bucketToGrams(a);
-      const gb = bucketToGrams(b);
-      if (Number.isFinite(ga) && Number.isFinite(gb)) return ga - gb;
-      if (Number.isFinite(ga)) return -1;
-      if (Number.isFinite(gb)) return 1;
-      return a.localeCompare(b);
-    });
-    return base;
+    // Normaliza posibles buckets del manifest (por compatibilidad: 8g -> 1/4oz, 16g -> 1/2oz, 1000g -> 1kg...)
+    const mapManifest = (arr: string[]) => {
+      const out = new Set<string>();
+      for (const label of arr) {
+        if ((FIXED_BUCKETS as readonly string[]).includes(label)) {
+          out.add(label);
+          continue;
+        }
+        // intenta convertir "1000g" / "8g" / "16g" / "31g"...
+        const g = Number(String(label).replace(/g$/i, ""));
+        if (Number.isFinite(g)) {
+          const mapped = bucketFromWeightFixed(g);
+          if ((FIXED_BUCKETS as readonly string[]).includes(mapped as any)) out.add(String(mapped));
+        }
+      }
+      return Array.from(out);
+    };
+
+    let base: string[] = [];
+    if (manifest?.buckets?.length) base = mapManifest(manifest.buckets);
+    else base = Array.from(new Set(baseOffers.map((o) => String(bucketLabelOf(o)))));
+
+    // ordenar exactamente como FIXED_BUCKETS
+    return FIXED_BUCKETS.filter((b) => base.includes(b));
   }, [baseOffers, manifest?.buckets]);
 
   const allDealers = useMemo(() => {
     if (manifest?.dealers?.length) return manifest.dealers;
-    return Array.from(
-      new Set(baseOffers.map((o) => o.dealer_id).filter(Boolean))
-    ).sort();
+    return Array.from(new Set(baseOffers.map((o) => o.dealer_id).filter(Boolean))).sort();
   }, [baseOffers, manifest]);
 
   /* ---------- URL <-> estado ---------- */
   useEffect(() => {
     const sp = new URLSearchParams(window.location.search);
-    const csv = (v: string | null) =>
-      new Set((v || "").split(",").filter(Boolean));
+    const csv = (v: string | null) => new Set((v || "").split(",").filter(Boolean));
 
     setSelMetals(forceMetal ? new Set([forceMetal]) : csv(sp.get("metal")));
     setSelForms(forceForm ? new Set([forceForm]) : csv(sp.get("form")));
-    setSelBuckets(
-      forceBuckets?.length ? new Set(forceBuckets) : csv(sp.get("bucket"))
-    );
+    setSelBuckets(forceBuckets?.length ? new Set(forceBuckets) : csv(sp.get("bucket")));
     setQ(sp.get("q") || "");
 
     if (forceDealer) setSelDealers(new Set([forceDealer]));
@@ -424,34 +373,23 @@ export default function AllIndexTable({
       ? "price"
       : sortParam.startsWith("name")
       ? "name"
-      : ["metal", "form", "bucket", "dealer"].some((k) =>
-          sortParam.startsWith(k)
-        )
+      : ["metal", "form", "bucket", "dealer"].some((k) => sortParam.startsWith(k))
       ? (sortParam.replace(/(Asc|Desc)$/, "") as SortKey)
       : "price";
     const dir: SortDir = sortParam.endsWith("Desc") ? "desc" : "asc";
     setSortKey(key);
     setSortDir(dir);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    forceDealer,
-    forceMetal,
-    forceForm,
-    forceBuckets?.join(","),
-  ]);
+  }, [forceDealer, forceMetal, forceForm, forceBuckets?.join(",")]);
 
   useEffect(() => {
     const sp = new URLSearchParams();
 
-    if (!forceMetal && selMetals.size)
-      sp.set("metal", Array.from(selMetals).join(","));
-    if (!forceForm && selForms.size)
-      sp.set("form", Array.from(selForms).join(","));
-    if (!forceBuckets?.length && selBuckets.size)
-      sp.set("bucket", Array.from(selBuckets).join(","));
+    if (!forceMetal && selMetals.size) sp.set("metal", Array.from(selMetals).join(","));
+    if (!forceForm && selForms.size) sp.set("form", Array.from(selForms).join(","));
+    if (!forceBuckets?.length && selBuckets.size) sp.set("bucket", Array.from(selBuckets).join(","));
     if (q) sp.set("q", q);
-    if (!forceDealer && selDealers.size)
-      sp.set("dealer", Array.from(selDealers).join(","));
+    if (!forceDealer && selDealers.size) sp.set("dealer", Array.from(selDealers).join(","));
 
     const compatSort = sortLabel(sortKey, sortDir);
     if (compatSort !== "priceAsc") sp.set("sort", compatSort);
@@ -461,32 +399,15 @@ export default function AllIndexTable({
     if (current === qs) return;
     const url = qs ? `?${qs}` : window.location.pathname;
     window.history.replaceState(null, "", url);
-  }, [
-    selMetals,
-    selForms,
-    selBuckets,
-    selDealers,
-    q,
-    sortKey,
-    sortDir,
-    forceDealer,
-    forceMetal,
-    forceForm,
-    forceBuckets,
-  ]);
+  }, [selMetals, selForms, selBuckets, selDealers, q, sortKey, sortDir, forceDealer, forceMetal, forceForm, forceBuckets]);
 
   /* ---------- Filtro + orden ---------- */
   const textPass = (o: Offer) =>
     !q ||
-    `${o.sku} ${o.brand ?? ""} ${o.series ?? ""} ${displayName(o)}`
-      .toLowerCase()
-      .includes(q.toLowerCase());
+    `${o.sku} ${o.brand ?? ""} ${o.series ?? ""} ${displayName(o)}`.toLowerCase().includes(q.toLowerCase());
 
   const comparator = (a: Offer, b: Offer) => {
-    const num = (v: unknown) =>
-      Number.isFinite(Number(v)) ? Number(v) : Number.POSITIVE_INFINITY;
-    const bucketA = bucketFromWeight(a.weight_g);
-    const bucketB = bucketFromWeight(b.weight_g);
+    const num = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : Number.POSITIVE_INFINITY);
     let va: string | number;
     let vb: string | number;
     switch (sortKey) {
@@ -503,8 +424,10 @@ export default function AllIndexTable({
         vb = b.form;
         break;
       case "bucket": {
-        const ga = bucketToGrams(bucketA);
-        const gb = bucketToGrams(bucketB);
+        const aLab = bucketLabelOf(a);
+        const bLab = bucketLabelOf(b);
+        const ga = bucketToGramsFixed(String(aLab));
+        const gb = bucketToGramsFixed(String(bLab));
         va = Number.isFinite(ga) ? ga : Number.POSITIVE_INFINITY;
         vb = Number.isFinite(gb) ? gb : Number.POSITIVE_INFINITY;
         break;
@@ -532,10 +455,7 @@ export default function AllIndexTable({
         vb = num(b.price_eur);
         break;
     }
-    const base =
-      typeof va === "number" && typeof vb === "number"
-        ? va - vb
-        : String(va).localeCompare(String(vb));
+    const base = typeof va === "number" && typeof vb === "number" ? va - vb : String(va).localeCompare(String(vb));
     return sortDir === "asc" ? base : -base;
   };
 
@@ -545,35 +465,18 @@ export default function AllIndexTable({
         if (!textPass(o)) return false;
         if (selMetals.size && !selMetals.has(o.metal)) return false;
         if (selForms.size && !selForms.has(o.form)) return false;
-        const b = bucketFromWeight(o.weight_g);
+        const b = String(bucketLabelOf(o));
         if (selBuckets.size && !selBuckets.has(b)) return false;
         if (selDealers.size && !selDealers.has(o.dealer_id)) return false;
         return true;
       })
       .sort(comparator);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    selMetals,
-    selForms,
-    selBuckets,
-    selDealers,
-    q,
-    sortKey,
-    sortDir,
-    dealerMeta,
-    spot,
-  ]);
+  }, [selMetals, selForms, selBuckets, selDealers, q, sortKey, sortDir, dealerMeta, spot]);
 
   const filtersSignature = useMemo(() => {
     const s = (set: Set<string>) => Array.from(set).sort().join(",");
-    return [
-      `m:${s(selMetals)}`,
-      `f:${s(selForms)}`,
-      `b:${s(selBuckets)}`,
-      `d:${s(selDealers)}`,
-      `q:${q}`,
-      `o:${sortKey}|${sortDir}`,
-    ].join("|");
+    return [`m:${s(selMetals)}`, `f:${s(selForms)}`, `b:${s(selBuckets)}`, `d:${s(selDealers)}`, `q:${q}`, `o:${sortKey}|${sortDir}`].join("|");
   }, [selMetals, selForms, selBuckets, selDealers, q, sortKey, sortDir]);
 
   /* ---------- Paginación ---------- */
@@ -596,7 +499,7 @@ export default function AllIndexTable({
         if (!textPass(o)) continue;
         if (o.metal !== m) continue;
         if (selForms.size && !selForms.has(o.form)) continue;
-        const b = bucketFromWeight(o.weight_g);
+        const b = String(bucketLabelOf(o));
         if (selBuckets.size && !selBuckets.has(b)) continue;
         if (selDealers.size && !selDealers.has(o.dealer_id)) continue;
         c++;
@@ -614,7 +517,7 @@ export default function AllIndexTable({
         if (!textPass(o)) continue;
         if (o.form !== f) continue;
         if (selMetals.size && !selMetals.has(o.metal)) continue;
-        const b = bucketFromWeight(o.weight_g);
+        const b = String(bucketLabelOf(o));
         if (selBuckets.size && !selBuckets.has(b)) continue;
         if (selDealers.size && !selDealers.has(o.dealer_id)) continue;
         c++;
@@ -630,7 +533,7 @@ export default function AllIndexTable({
       let c = 0;
       for (const o of baseOffers) {
         if (!textPass(o)) continue;
-        const b = bucketFromWeight(o.weight_g);
+        const b = String(bucketLabelOf(o));
         if (b !== b0) continue;
         if (selMetals.size && !selMetals.has(o.metal)) continue;
         if (selForms.size && !selForms.has(o.form)) continue;
@@ -651,7 +554,7 @@ export default function AllIndexTable({
         if (o.dealer_id !== d) continue;
         if (selMetals.size && !selMetals.has(o.metal)) continue;
         if (selForms.size && !selForms.has(o.form)) continue;
-        const b = bucketFromWeight(o.weight_g);
+        const b = String(bucketLabelOf(o));
         if (selBuckets.size && !selBuckets.has(b)) continue;
         c++;
       }
@@ -694,11 +597,7 @@ export default function AllIndexTable({
     setSelBuckets((prev) => {
       if (forceBuckets?.length) {
         const target = new Set(forceBuckets);
-        if (
-          prev.size === target.size &&
-          Array.from(prev).every((x) => target.has(x))
-        )
-          return prev;
+        if (prev.size === target.size && Array.from(prev).every((x) => target.has(x))) return prev;
         return target;
       }
       let changed = false;
@@ -711,16 +610,8 @@ export default function AllIndexTable({
       }
       return changed ? next : prev;
     });
-  }, [
-    formCounts,
-    metalCounts,
-    bucketCounts,
-    forceMetal,
-    forceForm,
-    forceBuckets,
-  ]);
+  }, [formCounts, metalCounts, bucketCounts, forceMetal, forceForm, forceBuckets]);
   useEffect(() => {
-    // Si estamos en /tienda/{dealer}, fijamos el filtro y evitamos podas
     if (forceDealer) {
       setSelDealers((prev) => {
         if (prev.size === 1 && prev.has(forceDealer)) return prev;
@@ -728,8 +619,9 @@ export default function AllIndexTable({
       });
       return;
     }
-    // Modo normal: poda dealers sin resultados
-    if (forceDealer) { setPage(1); /* junto al setSelDealers(...) */ }
+    if (forceDealer) {
+      setPage(1);
+    }
     setSelDealers((prev) => {
       let changed = false;
       const next = new Set(prev);
@@ -755,36 +647,28 @@ export default function AllIndexTable({
     setPage(1);
   };
 
-  const onSort = (k: SortKey) =>
-    k === sortKey
-      ? setSortDir(nextDir(sortDir))
-      : (setSortKey(k), setSortDir("asc"));
+  const onSort = (k: SortKey) => (k === sortKey ? setSortDir(nextDir(sortDir)) : (setSortKey(k), setSortDir("asc")));
 
   /* ---------- Render ---------- */
   return (
     <div className="space-y-3">
       <FiltersBarCompact
-        // visibility (opcional)
         hideMetalFacet={hideMetalFacet}
         hideFormFacet={hideFormFacet}
         hideBucketFacet={hideBucketFacet}
         hideDealerFacet={hideDealerFacet}
-        // data
         metals={metals}
         forms={forms}
         allBuckets={allBuckets}
         allDealers={allDealers}
-        // selected
         selMetals={selMetals}
         selForms={selForms}
         selBuckets={selBuckets}
         selDealers={selDealers}
-        // setters
         setSelMetals={setSelMetals}
         setSelForms={setSelForms}
         setSelBuckets={setSelBuckets}
         setSelDealers={setSelDealers}
-        // counts / labels
         metalCounts={metalCounts}
         formCounts={formCounts}
         bucketCounts={bucketCounts}
@@ -794,12 +678,9 @@ export default function AllIndexTable({
         dealerMeta={dealerMeta}
       />
 
-      {/* Tabla (desktop) con acciones y paginación arriba */}
+      {/* Tabla (desktop) */}
       <div className="hidden md:block card overflow-x-auto">
-        {/* 🆕 Top bar: buscador + filas + limpiar */}
         <TopActions q={q} onQ={setQ} onReset={resetAll} />
-
-        {/* 🆕 Info spot */}
         <InfoBarSpot
           spotLoading={spotLoading}
           goldEurPerG={goldEurPerG}
@@ -809,7 +690,6 @@ export default function AllIndexTable({
           effectiveUpdatedAt={effectiveUpdatedAt}
         />
 
-        {/* 🆕 Paginación TOP */}
         {!loading && (
           <div className="px-3">
             <PaginationControls
@@ -835,70 +715,20 @@ export default function AllIndexTable({
             <table className="table w-full">
               <thead className="thead">
                 <tr>
-                  <SortableTh
-                    label="Metal"
-                    k="metal"
-                    align="center"
-                    w="w-24"
-                    activeKey={sortKey}
-                    dir={sortDir}
-                    onSort={onSort}
-                  />
-                  <SortableTh
-                    label="Formato"
-                    k="form"
-                    align="center"
-                    w="w-28"
-                    activeKey={sortKey}
-                    dir={sortDir}
-                    onSort={onSort}
-                  />
-                  <SortableTh
-                    label="Tamaño"
-                    k="bucket"
-                    align="center"
-                    w="w-24"
-                    activeKey={sortKey}
-                    dir={sortDir}
-                    onSort={onSort}
-                  />
-                  <SortableTh
-                    label="Marca / Serie"
-                    k="name"
-                    align="left"
-                    activeKey={sortKey}
-                    dir={sortDir}
-                    onSort={onSort}
-                  />
+                  <SortableTh label="Metal" k="metal" align="center" w="w-24" activeKey={sortKey} dir={sortDir} onSort={onSort} />
+                  <SortableTh label="Formato" k="form" align="center" w="w-28" activeKey={sortKey} dir={sortDir} onSort={onSort} />
+                  <SortableTh label="Tamaño" k="bucket" align="center" w="w-24" activeKey={sortKey} dir={sortDir} onSort={onSort} />
+                  <SortableTh label="Marca / Serie" k="name" align="left" activeKey={sortKey} dir={sortDir} onSort={onSort} />
                   <th className="th !text-center w-24">Ficha</th>
-                  <SortableTh
-                    label="Precio"
-                    k="price"
-                    align="center"
-                    w="w-36"
-                    activeKey={sortKey}
-                    dir={sortDir}
-                    onSort={onSort}
-                  />
-                  <SortableTh
-                    label="Premium (s/envío)"
-                    k="premium"
-                    align="center"
-                    w="w-28"
-                    activeKey={sortKey}
-                    dir={sortDir}
-                    onSort={onSort}
-                  />
+                  <SortableTh label="Precio" k="price" align="center" w="w-36" activeKey={sortKey} dir={sortDir} onSort={onSort} />
+                  <SortableTh label="Premium (s/envío)" k="premium" align="center" w="w-28" activeKey={sortKey} dir={sortDir} onSort={onSort} />
                   <th className="th text-left w-40">Comprar en</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
                 {pageRows.map((o, idx) => {
-                  const key = `${o.sku}|${o.dealer_id}|${
-                    o.buy_url ?? o.price_eur ?? idx
-                  }`;
-                  const dealerLabel =
-                    dealerMeta[o.dealer_id]?.label ?? o.dealer_id;
+                  const key = `${o.sku}|${o.dealer_id}|${o.buy_url ?? o.price_eur ?? idx}`;
+                  const dealerLabel = dealerMeta[o.dealer_id]?.label ?? o.dealer_id;
                   const prem = premiumFromSpot(o, spot);
 
                   return (
@@ -914,10 +744,7 @@ export default function AllIndexTable({
                 })}
                 {!pageRows.length && (
                   <tr>
-                    <td
-                      colSpan={8}
-                      className="td text-center text-zinc-500 py-10"
-                    >
+                    <td colSpan={8} className="td text-center text-zinc-500 py-10">
                       Sin resultados con los filtros actuales.
                     </td>
                   </tr>
@@ -925,7 +752,6 @@ export default function AllIndexTable({
               </tbody>
             </table>
 
-            {/* 🆕 Paginación BOTTOM */}
             <div className="border-t bg-white px-3">
               <PaginationControls
                 page={page}
@@ -942,11 +768,9 @@ export default function AllIndexTable({
               />
             </div>
 
-            {/* Nota de envío debajo de la tabla */}
             <div className="px-3">
               <div className="px-3 py-2 text-xs text-zinc-600">
-                <span className="opacity-80">Nota:</span> Envío no incluido (
-                <span className="whitespace-nowrap">≈12 €</span> península).
+                <span className="opacity-80">Nota:</span> Envío no incluido (<span className="whitespace-nowrap">≈12 €</span> península).
               </div>
             </div>
           </>
@@ -955,14 +779,9 @@ export default function AllIndexTable({
 
       {/* Cards (mobile) */}
       <div className="md:hidden grid grid-cols-1 gap-3">
-        {/* Buscador */}
         <div className="card p-3">
           <div className="relative">
-            <svg
-              aria-hidden
-              viewBox="0 0 24 24"
-              className="absolute left-2 top-1/2 -translate-y-1/2 h-5 w-5 text-zinc-500 pointer-events-none"
-            >
+            <svg aria-hidden viewBox="0 0 24 24" className="absolute left-2 top-1/2 -translate-y-1/2 h-5 w-5 text-zinc-500 pointer-events-none">
               <path
                 fill="currentColor"
                 d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16a6.471 6.471 0 0 0 4.23-1.57l.27.28v.79L20 21.5 21.5 20l-6-6Zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14Z"
@@ -977,7 +796,6 @@ export default function AllIndexTable({
           </div>
         </div>
 
-        {/* Info bar (mobile) */}
         <div className="card p-3">
           <InfoBarSpotCompact
             spotLoading={spotLoading}
@@ -989,10 +807,8 @@ export default function AllIndexTable({
           />
         </div>
 
-        {/* Controles (mobile): ordenar + paginación TOP */}
         {!loading && (
           <div className="card p-3 space-y-2">
-            {/* Ordenar */}
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs text-zinc-600">Ordenar:</span>
               <select
@@ -1013,25 +829,16 @@ export default function AllIndexTable({
               <button
                 onClick={() => setSortDir(sortDir === "asc" ? "desc" : "asc")}
                 className="cursor-pointer inline-flex items-center gap-1 rounded border px-2 py-1 text-sm hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-[hsl(var(--brand)/0.35)]"
-                aria-label={`Cambiar dirección (${
-                  sortDir === "asc" ? "ascendente" : "descendente"
-                })`}
+                aria-label={`Cambiar dirección (${sortDir === "asc" ? "ascendente" : "descendente"})`}
                 title={sortDir === "asc" ? "Ascendente" : "Descendente"}
               >
                 {sortDir === "asc" ? "▲" : "▼"}
-                <span className="text-xs text-zinc-600">
-                  {sortDir === "asc" ? "Asc" : "Desc"}
-                </span>
+                <span className="text-xs text-zinc-600">{sortDir === "asc" ? "Asc" : "Desc"}</span>
               </button>
 
-              <div className="ml-auto text-xs text-zinc-600">
-                {totalRows
-                  ? `${start + 1}–${end} de ${totalRows}`
-                  : "0 resultados"}
-              </div>
+              <div className="ml-auto text-xs text-zinc-600">{totalRows ? `${start + 1}–${end} de ${totalRows}` : "0 resultados"}</div>
             </div>
 
-            {/* Paginación TOP (mismo componente que desktop) */}
             <PaginationControls
               page={page}
               pageCount={totalPages}
@@ -1048,28 +855,20 @@ export default function AllIndexTable({
           </div>
         )}
 
-        {/* Encabezado sutil tipo “tabla” */}
         <div className="px-3">
           <div className="rounded-lg bg-zinc-50 text-[11px] text-zinc-600 px-2 py-1.5">
-            Tabla de ofertas · orden:{" "}
-            <span className="font-medium">
-              {
-                (
-                  {
-                    price: "Precio",
-                    premium: "Premium",
-                    name: "Marca/Serie",
-                    metal: "Metal",
-                    form: "Formato",
-                    bucket: "Tamaño",
-                    dealer: "Tienda",
-                  } as Record<SortKey, string>
-                )[sortKey]
-              }
+            Tabla de ofertas · orden: <span className="font-medium">
+              {{
+                price: "Precio",
+                premium: "Premium",
+                name: "Marca/Serie",
+                metal: "Metal",
+                form: "Formato",
+                bucket: "Tamaño",
+                dealer: "Tienda",
+              }[sortKey]}
             </span>{" "}
-            <span className="opacity-70">
-              ({sortDir === "asc" ? "Asc" : "Desc"})
-            </span>
+            <span className="opacity-70">({sortDir === "asc" ? "Asc" : "Desc"})</span>
           </div>
         </div>
 
@@ -1077,9 +876,7 @@ export default function AllIndexTable({
           <div className="card p-4 text-sm text-zinc-600">Cargando…</div>
         ) : (
           pageRows.map((o, idx) => {
-            const key = `${o.sku}|${o.dealer_id}|${
-              o.buy_url ?? o.price_eur ?? idx
-            }`;
+            const key = `${o.sku}|${o.dealer_id}|${o.buy_url ?? o.price_eur ?? idx}`;
             const dealerLabel = dealerMeta[o.dealer_id]?.label ?? o.dealer_id;
             const prem = premiumFromSpot(o, spot);
 
@@ -1096,13 +893,8 @@ export default function AllIndexTable({
           })
         )}
 
-        {!loading && !pageRows.length && (
-          <div className="text-center text-zinc-500">
-            Sin resultados con los filtros actuales.
-          </div>
-        )}
+        {!loading && !pageRows.length && <div className="text-center text-zinc-500">Sin resultados con los filtros actuales.</div>}
 
-        {/* Paginación BOTTOM (mismo componente que desktop) */}
         {!loading && (
           <div className="px-3">
             <PaginationControls
@@ -1121,11 +913,9 @@ export default function AllIndexTable({
           </div>
         )}
 
-        {/* Nota de envío debajo del listado móvil */}
         {!loading && (
           <div className="px-3 py-2 text-xs text-zinc-600">
-            <span className="opacity-80">Nota:</span> Envío no incluido (
-            <span className="whitespace-nowrap">≈12 €</span> península).
+            <span className="opacity-80">Nota:</span> Envío no incluido (<span className="whitespace-nowrap">≈12 €</span> península).
           </div>
         )}
       </div>
