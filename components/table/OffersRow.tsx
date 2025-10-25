@@ -84,17 +84,24 @@ const TOL_G: Record<string, number> = {
 export const bucketFromWeight = (weight_g: unknown): string => {
   const w = Number(weight_g);
   if (!Number.isFinite(w) || w <= 0) return "—";
-
-  // 1) Intento exacto contra la lista fija en este orden
   for (const label of BUCKETS_ORDER) {
     const target = BUCKET_TARGET_G[label];
     const tol = TOL_G[label] ?? 0.5;
     if (Math.abs(w - target) <= tol) return label;
   }
-
-  // 2) Fallback: devolver gramos redondeados
   return `${Math.round(w)}g`;
 };
+
+// Convierte etiqueta humana -> parte de slug
+//  - "1/2oz" -> "1_2oz"
+//  - "1/4oz" -> "1_4oz"
+//  - "2,5g"  -> "2_5g"
+const toBucketSlug = (label: string): string =>
+  label.replace(/\//g, "_").replace(/,/g, "_").toLowerCase();
+
+// Normaliza SKU para URL: "/" -> "_" y "oz" -> "OZ"
+const toSkuUrl = (sku: string): string =>
+  (sku || "").replace(/\//g, "_").replace(/oz/gi, "OZ");
 
 const tailFromSku = (sku: string) => {
   const parts = (sku || "").split("-");
@@ -154,6 +161,11 @@ export default function OffersRow({
     !!pathname &&
     (pathname.startsWith(`/tienda/${o.dealer_id}`) || pathname.startsWith(`/tiendas/${o.dealer_id}`));
 
+  // 🆕 Etiquetas de tamaño para URL y SKU
+  const bucketLabel = bucketFromWeight(o.weight_g);     // p.ej. "1/2oz"
+  const bucketSlug  = toBucketSlug(bucketLabel);        // p.ej. "1_2oz"
+  const skuForUrl   = toSkuUrl(o.sku);                  // p.ej. "AU-1_2OZ-HAFNER"
+
   return (
     <tr
       className={[
@@ -164,7 +176,7 @@ export default function OffersRow({
     >
       <td className="td text-center text-zinc-800">{niceMetal[o.metal] ?? o.metal}</td>
       <td className="td text-center text-zinc-800">{niceForm[o.form] ?? o.form}</td>
-      <td className="td text-center text-zinc-800">{bucketFromWeight(o.weight_g)}</td>
+      <td className="td text-center text-zinc-800">{bucketLabel}</td>
 
       <td className="td">
         <div className="flex min-w-0 items-center gap-2">
@@ -181,11 +193,17 @@ export default function OffersRow({
               metal: o.metal,
               form: o.form,
               weight_g: Number(o.weight_g),
+              // 🆕 pistas para el helper del slug:
+              // - weight_label: humana ("1/2oz") por si quieres mostrarla en la ficha
+              // - weight_label_slug: lista para URL ("1_2oz")
+              weight_label: bucketLabel,
+              weight_label_slug: bucketSlug,
               brand: o.brand ?? null,
               series: o.series ?? null,
-              sku: o.sku,
+              // 🆕 SKU con "_" y "OZ" en mayúsculas
+              sku: skuForUrl,
             })}`}
-            aria-label={`Ver ficha de ${o.sku}`}
+            aria-label={`Ver ficha de ${skuForUrl}`}
             className="inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs
             border border-[hsl(var(--brand))] text-[hsl(var(--brand))]
             bg-[hsl(var(--brand)/0.12)] hover:bg-[hsl(var(--brand)/0.18)]
@@ -211,9 +229,8 @@ export default function OffersRow({
       <td className="td text-left">
         {o.buy_url ? (
           <div
-            className="flex items-center gap-2 justify-end w-[228px]" // ⬅️ ancho fijo del grupo
+            className="flex items-center gap-2 justify-end w-[228px]"
           >
-            {/* Botón principal: Comprar (ocupa todo el ancho disponible) */}
             <a
               href={o.buy_url}
               target="_blank"
@@ -229,7 +246,6 @@ export default function OffersRow({
               {dealerLabel}
             </a>
 
-            {/* Botón icono tienda → Ficha (oculto si ya estás en esa tienda) */}
             {!isDealerPage && (
               <Link
                 href={`/tiendas/${o.dealer_id}`}
@@ -239,7 +255,6 @@ export default function OffersRow({
                 aria-label={`Ver ficha de la tienda ${dealerLabel}`}
                 title="Ficha de tienda"
               >
-                {/* storefront icon trazado (como pediste) */}
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   viewBox="0 0 24 24"

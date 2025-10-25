@@ -88,8 +88,8 @@ export default function FiltersBarCompact(props: FiltersBarCompactProps) {
   );
 
   return (
-        <div className={clsx("flex flex-col gap-2.5", className)}>
-      {/* Fila compacta: Metal + Formato */}
+    <div className={clsx("flex flex-col gap-2.5", className)}>
+      {/* Metal + Formato */}
       <div className={topRowGridClass}>
         {showMetal && (
           <Row>
@@ -146,15 +146,15 @@ export default function FiltersBarCompact(props: FiltersBarCompactProps) {
         )}
       </div>
 
-      {/* Tamaño (scrollable, compacto) */}
+      {/* Tamaño — sin scroll, con wrap */}
       {!hideBucketFacet && (
         <Row>
           <Title icon={<Ruler className="h-3.5 w-3.5 text-zinc-500" />}>Tamaño</Title>
-          <div className="no-scrollbar -mx-1 flex items-center gap-1.5 overflow-x-auto px-1 py-0.5">
+          <div className="flex flex-wrap items-center gap-1.5">
             <Chip
               active={!selBuckets.size}
               onClick={() => setSelBuckets(new Set())}
-              className="px-2.5 py-1 text-xs shrink-0"
+              className="px-2.5 py-1 text-xs"
             >
               Todos
             </Chip>
@@ -167,7 +167,7 @@ export default function FiltersBarCompact(props: FiltersBarCompactProps) {
                     key={b}
                     active={active}
                     onClick={() => toggle(setSelBuckets, selBuckets, b)}
-                    className="px-2.5 py-1 text-xs shrink-0"
+                    className="px-2.5 py-1 text-xs"
                     aria-pressed={active}
                   >
                     {b} {bucketCounts[b] ? `(${bucketCounts[b]})` : ""}
@@ -178,15 +178,15 @@ export default function FiltersBarCompact(props: FiltersBarCompactProps) {
         </Row>
       )}
 
-      {/* Tienda (scrollable, compacto) */}
+      {/* Tienda — sin scroll, con wrap */}
       {!hideDealerFacet && (
         <Row>
           <Title icon={<Store className="h-3.5 w-3.5 text-zinc-500" />}>Tienda</Title>
-          <div className="no-scrollbar -mx-1 flex items-center gap-1.5 overflow-x-auto px-1 py-0.5">
+          <div className="flex flex-wrap items-center gap-1.5">
             <Chip
               active={!selDealers.size}
               onClick={() => setSelDealers(new Set())}
-              className="px-2.5 py-1 text-xs shrink-0"
+              className="px-2.5 py-1 text-xs"
             >
               Todas
             </Chip>
@@ -200,7 +200,7 @@ export default function FiltersBarCompact(props: FiltersBarCompactProps) {
                     key={d}
                     active={active}
                     onClick={() => toggle(setSelDealers, selDealers, d)}
-                    className="px-2.5 py-1 text-xs shrink-0"
+                    className="px-2.5 py-1 text-xs"
                     aria-pressed={active}
                   >
                     <span className="inline-flex items-center gap-1">

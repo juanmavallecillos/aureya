@@ -33,6 +33,9 @@ type SkuDoc = {
     metal: string;
     form: string;
     weight_g: number;
+    // (opcional, si algún scraper/publisher ya lo añade)
+    weight_label?: string | null; // p.ej. "1/2oz", "2,5g"
+    weight_label_slug?: string | null; // p.ej. "1_2oz", "2_5g"
   };
   spot: { eur_per_g: number; updated_at: string };
   updated_at: string;
@@ -42,7 +45,10 @@ type SkuDoc = {
   image?: string;
 };
 
-type HistDoc = { sku: string; series: { date: string; best_total_eur: number | null }[] };
+type HistDoc = {
+  sku: string;
+  series: { date: string; best_total_eur: number | null }[];
+};
 type DealersMap = Record<string, { label: string; verified?: boolean }>;
 type MediaIndex = Record<string, string[]>;
 
@@ -55,12 +61,66 @@ type SpotDoc = {
 
 const OZ_TO_G = 31.1034768;
 
+/* ---------- Buckets fijos + tolerancias ---------- */
+const BUCKETS_ORDER: string[] = [
+  "2g",
+  "2,5g",
+  "5g",
+  "1/4oz",
+  "10g",
+  "1/2oz",
+  "20g",
+  "25g",
+  "1oz",
+  "50g",
+  "100g",
+  "250g",
+  "500g",
+  "1kg",
+];
+const BUCKET_TARGET_G: Record<string, number> = {
+  "2g": 2,
+  "2,5g": 2.5,
+  "5g": 5,
+  "1/4oz": OZ_TO_G / 4, // ~7.776 g
+  "10g": 10,
+  "1/2oz": OZ_TO_G / 2, // ~15.552 g
+  "20g": 20,
+  "25g": 25,
+  "1oz": OZ_TO_G,
+  "50g": 50,
+  "100g": 100,
+  "250g": 250,
+  "500g": 500,
+  "1kg": 1000,
+};
+const TOL_G: Record<string, number> = {
+  "2g": 0.2,
+  "2,5g": 0.2,
+  "5g": 0.3,
+  "1/4oz": 0.25,
+  "10g": 0.4,
+  "1/2oz": 0.4,
+  "20g": 0.6,
+  "25g": 0.6,
+  "1oz": 0.6,
+  "50g": 1.0,
+  "100g": 2.0,
+  "250g": 3.0,
+  "500g": 5.0,
+  "1kg": 8.0,
+};
+
 /* ---------- Utils formato ---------- */
 const fmtMoney = (v: unknown) =>
   Number.isFinite(Number(v))
-    ? new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(Number(v))
+    ? new Intl.NumberFormat("es-ES", {
+        style: "currency",
+        currency: "EUR",
+      }).format(Number(v))
     : "—";
-const fmtPct = (v: unknown) => (Number.isFinite(Number(v)) ? `${Number(v).toFixed(2)}%` : "—");
+const fmtPct = (v: unknown) =>
+  Number.isFinite(Number(v)) ? `${Number(v).toFixed(2)}%` : "—";
 
 /* ---------- Helpers ES ---------- */
 const niceMetal = (m?: string) => {
@@ -79,13 +139,36 @@ const niceForm = (f?: string) => {
   return f || "";
 };
 
-function weightLabel(weight_g: unknown) {
+/* ---------- Bucket y etiquetas desde gramos ---------- */
+function bucketFromWeight(weight_g: unknown): string {
+  const w = Number(weight_g);
+  if (!Number.isFinite(w) || w <= 0) return "";
+  for (const label of BUCKETS_ORDER) {
+    const target = BUCKET_TARGET_G[label];
+    const tol = TOL_G[label] ?? 0.5;
+    if (Math.abs(w - target) <= tol) return label;
+  }
+  // fallback (gramos redondeados)
+  const n = Math.round(w);
+  return n === 1000 ? "1kg" : `${n}g`;
+}
+function weightLabelFromWeight(weight_g: unknown): string {
+  // label de UI: respeta "1/4oz", "1/2oz", "2,5g", etc.
   const b = bucketFromWeight(weight_g);
-  if (b === "1oz") return "1oz";
-  if (b === "1kg") return "1kg";
-  if (b && b.endsWith("g")) return b;
-  const w = Math.max(1, Math.round(Number(weight_g || 0)));
-  return `${w} g`;
+  return b || "—";
+}
+function weightLabelSlug(label?: string | null): string {
+  const s = (label || "").trim();
+  if (!s) return "";
+  return s.replace(/\//g, "_").replace(/,/g, "_").toLowerCase();
+}
+
+function weightLabel(weight_g: unknown) {
+  // para títulos/SEO
+  const b = bucketFromWeight(weight_g);
+  if (!b) return "—";
+  // ya viene en el formato deseado (incluye 1/4oz, 1/2oz, etc.)
+  return b;
 }
 
 function titleName(meta?: SkuDoc["meta"]) {
@@ -102,16 +185,6 @@ function displayName(meta?: SkuDoc["meta"]) {
   const parts = [meta.series, meta.brand].filter(Boolean);
   if (parts.length) return parts.join(" — ");
   return `${niceForm(meta.form)} ${niceMetal(meta.metal)}`;
-}
-
-/* ---------- Tamaño “bucket” desde gramos ---------- */
-function bucketFromWeight(weight_g: unknown) {
-  const w = Number(weight_g);
-  if (!Number.isFinite(w)) return "";
-  if (Math.abs(w - OZ_TO_G) < 0.06) return "1oz";
-  const specials = [1, 2, 2.5, 5, 10, 20, 31.1035, 50, 100, 250, 500, 1000];
-  for (const s of specials) if (Math.abs(w - s) < 0.25) return s === 1000 ? "1kg" : `${s}g`;
-  return `${Math.round(w)}g`;
 }
 
 /* ---------- Chip UI ---------- */
@@ -160,9 +233,11 @@ function selectPreferredImages(paths: string[]) {
 /* ======================================================================================
    SEO dinámico
 ====================================================================================== */
-export async function generateMetadata(
-  { params }: { params: Promise<{ slug: string[] }> }
-): Promise<Metadata> {
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string[] }>;
+}): Promise<Metadata> {
   const { slug } = await params;
   const sku = extractSkuFromSlugParam(slug);
 
@@ -174,36 +249,52 @@ export async function generateMetadata(
   if (!meta) return { title: sku };
 
   const name = displayName(meta);
-  const title = `${titleName(meta)} · ${weightLabel(meta.weight_g)}`;
+  const weightLbl = meta.weight_label || weightLabelFromWeight(meta.weight_g);
+  const weightLblSlug = meta.weight_label_slug || weightLabelSlug(weightLbl);
+  const title = `${titleName(meta)} · ${weightLbl}`;
 
   const prettySlug = productSlug({
     metal: meta.metal,
     form: meta.form,
     weight_g: meta.weight_g,
+    weight_label: weightLbl,
+    weight_label_slug: weightLblSlug,
     brand: meta.brand ?? null,
     series: meta.series ?? null,
     sku,
   });
 
-  const base = (process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000").replace(/\/+$/, "");
+  const base = (
+    process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"
+  ).replace(/\/+$/, "");
   const canonical = `${base}/producto/${prettySlug}`;
 
   return {
     title,
-    description: `Mejores ofertas, prima y evolución de precio para ${name} (${weightLabel(meta.weight_g)}). Datos actualizados y tiendas verificadas.`,
+    description: `Mejores ofertas, prima y evolución de precio para ${name} (${weightLbl}). Datos actualizados y tiendas verificadas.`,
     alternates: { canonical },
     openGraph: { url: canonical, title, type: "website" },
-    twitter: { card: "summary_large_image", title, description: `Mejores ofertas de ${name} (${weightLabel(meta.weight_g)}).` },
-    robots: { index: true, follow: true, googleBot: { index: true, follow: true, "max-image-preview": "large" } },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description: `Mejores ofertas de ${name} (${weightLbl}).`,
+    },
+    robots: {
+      index: true,
+      follow: true,
+      googleBot: { index: true, follow: true, "max-image-preview": "large" },
+    },
   };
 }
 
 /* ======================================================================================
    Página
 ====================================================================================== */
-export default async function ProductPage(
-  { params }: { params: Promise<{ slug: string[] }> }
-) {
+export default async function ProductPage({
+  params,
+}: {
+  params: Promise<{ slug: string[] }>;
+}) {
   const { slug } = await params;
   const sku = extractSkuFromSlugParam(slug);
 
@@ -215,65 +306,103 @@ export default async function ProductPage(
   if (!data?.meta) redirect("/");
 
   // 2) Slug canónico (redirect si no coincide)
+  const weightLbl =
+    data.meta.weight_label || weightLabelFromWeight(data.meta.weight_g);
+  const weightLblSlug =
+    data.meta.weight_label_slug || weightLabelSlug(weightLbl);
+
+  // 2) Slug canónico (redirect si no coincide realmente)
   const canonicalSlug = productSlug({
     metal: data.meta.metal,
     form: data.meta.form,
     weight_g: data.meta.weight_g,
+    weight_label: weightLbl,
+    weight_label_slug: weightLblSlug,
     brand: data.meta.brand ?? null,
     series: data.meta.series ?? null,
-    sku: data.sku,
+    sku: data.sku, // mantener literal
   });
+
   const requested = slug.at(-1) || "";
-  if (!requested.includes("--") || requested !== canonicalSlug) {
+
+  // Extraemos ambos SKU para comparar solo esa parte
+  const requestedSku = requested.split("--").at(-1)?.replaceAll("/", "_");
+  const canonicalSku = canonicalSlug.split("--").at(-1)?.replaceAll("/", "_");
+
+  // Redirige solo si difiere la parte previa al SKU (forma/metal/peso), no el SKU
+  const requestedPrefix = requested.split("--").at(0);
+  const canonicalPrefix = canonicalSlug.split("--").at(0);
+
+  if (
+    requestedPrefix !== canonicalPrefix &&
+    requestedSku === canonicalSku // el SKU es el mismo (solo / vs _)
+  ) {
     redirect(`/producto/${canonicalSlug}`);
   }
 
   // 3) Histórico
-  const history = await fetchJsonOrNull<HistDoc>(`/history/${sku}.json`, {
-    revalidate: 43200,           // 12 h
+  const history = (await fetchJsonOrNull<HistDoc>(`/history/${sku}.json`, {
+    revalidate: 43200, // 12 h
     tags: [`history:${sku}`],
-  }).catch(() => ({ sku, series: [] as HistDoc["series"] })) ?? { sku, series: [] };
+  }).catch(() => ({ sku, series: [] as HistDoc["series"] }))) ?? {
+    sku,
+    series: [],
+  };
 
   // 4) Dealers
-  const dealers = await fetchJsonOrNull<DealersMap>("/meta/dealers.json", {
-    revalidate: 86400,           // 24 h
-    tags: ["dealers"],
-  }).catch(() => ({} as DealersMap)) ?? ({} as DealersMap);
+  const dealers =
+    (await fetchJsonOrNull<DealersMap>("/meta/dealers.json", {
+      revalidate: 86400, // 24 h
+      tags: ["dealers"],
+    }).catch(() => ({} as DealersMap))) ?? ({} as DealersMap);
 
   const getDealerLabel = (id: string) => dealers?.[id]?.label || id;
   const isDealerVerified = (id: string) => !!dealers?.[id]?.verified;
 
-  // 5) Ofertas (sin ordenar aquí; la tabla se encarga de ordenar)
+  // 5) Ofertas
   const offers = Array.isArray(data?.offers)
     ? data.offers.filter((o) => o?.total_eur != null)
     : [];
-  const best = [...offers].sort((a, b) => Number(a.total_eur) - Number(b.total_eur))[0] || null;
+  const best =
+    [...offers].sort((a, b) => Number(a.total_eur) - Number(b.total_eur))[0] ||
+    null;
 
   // 6) Derivados de la ficha
   const updatedAt = data?.updated_at ? new Date(data.updated_at) : null;
   const updatedStr = updatedAt
-    ? updatedAt.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })
+    ? updatedAt.toLocaleTimeString("es-ES", {
+        hour: "2-digit",
+        minute: "2-digit",
+      })
     : "—";
 
   // 7) Spot GLOBAL (servidor) → prop a la tabla
   const spot = await fetchJsonOrNull<SpotDoc>("meta/spot.json", {
-    revalidate: 7200,            // 2 h
+    revalidate: 7200, // 2 h
     tags: ["spot"],
   });
 
   /* 8) GALERÍA */
-  const mediaIdx = await fetchJsonOrNull<MediaIndex>("media/index.json", {
-    revalidate: 7200,            // 2 h
-    tags: ["media_index"],
-  }) ?? ({} as MediaIndex);
+  const mediaIdx =
+    (await fetchJsonOrNull<MediaIndex>("media/index.json", {
+      revalidate: 7200, // 2 h
+      tags: ["media_index"],
+    })) ?? ({} as MediaIndex);
 
-  const rawPaths = Array.isArray(mediaIdx?.[data.sku]) ? mediaIdx[data.sku] : [];
+  const rawPaths = Array.isArray(mediaIdx?.[data.sku])
+    ? mediaIdx[data.sku]
+    : [];
   const preferred = selectPreferredImages(rawPaths);
   const galleryImages: string[] = preferred.slice(0, 4); // paths crudos; ProductGallery los convierte a CDN
-  const jsonImagesAbs = (galleryImages.length
-    ? galleryImages
-    : (data.images?.length ? data.images : (data.image ? [data.image] : []))
-  ).map(p => cdnPath(p)); // URLs absolutas/proxy para JSON-LD
+  const jsonImagesAbs = (
+    galleryImages.length
+      ? galleryImages
+      : data.images?.length
+      ? data.images
+      : data.image
+      ? [data.image]
+      : []
+  ).map((p) => cdnPath(p)); // URLs absolutas/proxy para JSON-LD
 
   return (
     <main className="mx-auto max-w-6xl px-4 pb-16">
@@ -282,16 +411,21 @@ export default async function ProductPage(
         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
-              {titleName(data.meta)} · {weightLabel(data.meta.weight_g)}
+              {titleName(data.meta)} · {weightLbl}
             </h1>
 
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <Chip>{niceMetal(data.meta.metal)}</Chip>
               <Chip>{niceForm(data.meta.form)}</Chip>
-              {bucketFromWeight(data.meta.weight_g) && <Chip>{bucketFromWeight(data.meta.weight_g)}</Chip>}
+              {weightLbl && <Chip>{weightLbl}</Chip>}
               <span className="text-sm text-zinc-600 ml-1">
                 Actualizado: <span className="font-medium">{updatedStr}</span>
-                {updatedAt && <span className="opacity-70"> ({updatedAt.toLocaleDateString("es-ES")})</span>}
+                {updatedAt && (
+                  <span className="opacity-70">
+                    {" "}
+                    ({updatedAt.toLocaleDateString("es-ES")})
+                  </span>
+                )}
               </span>
             </div>
           </div>
@@ -303,14 +437,19 @@ export default async function ProductPage(
       {/* BLOQUE SEO */}
       <section
         className="mt-4 rounded-lg pl-4 pr-3 py-3"
-        style={{ borderLeft: "4px solid hsl(var(--brand))", background: "hsl(var(--brand) / 0.05)" }}
+        style={{
+          borderLeft: "4px solid hsl(var(--brand))",
+          background: "hsl(var(--brand) / 0.05)",
+        }}
       >
         <h2 className="text-lg md:text-xl font-semibold text-zinc-900">
           Mejor precio y prima frente al <em>spot</em>
         </h2>
         <p className="mt-1 text-sm text-zinc-700">
-          Esta ficha muestra <strong>mejor oferta</strong>, histórico diario y todas las ofertas disponibles para este SKU en tiendas verificadas.
-          Calculamos la <strong>prima</strong> sobre el valor intrínseco (€/g y €/oz) para comparar de forma homogénea.
+          Esta ficha muestra <strong>mejor oferta</strong>, histórico diario y
+          todas las ofertas disponibles para este SKU en tiendas verificadas.
+          Calculamos la <strong>prima</strong> sobre el valor intrínseco (€/g y
+          €/oz) para comparar de forma homogénea.
         </p>
       </section>
 
@@ -331,7 +470,9 @@ export default async function ProductPage(
                   <div className="text-[22px] md:text-2xl font-extrabold leading-none text-zinc-900">
                     {fmtMoney(best.total_eur)}
                   </div>
-                  <div className="mt-0.5 text-xs text-zinc-500">Total (producto + envío)</div>
+                  <div className="mt-0.5 text-xs text-zinc-500">
+                    Total (producto + envío)
+                  </div>
                 </div>
 
                 <div className="flex-1 grid sm:grid-cols-3 gap-3 text-sm text-zinc-700">
@@ -340,27 +481,39 @@ export default async function ProductPage(
                     <div className="font-medium flex items-center gap-1">
                       {getDealerLabel(best.dealer_id)}
                       {isDealerVerified(best.dealer_id) && (
-                        <VerifiedBadge size={18} className="translate-y-[1px]" />
+                        <VerifiedBadge
+                          size={18}
+                          className="translate-y-[1px]"
+                        />
                       )}
                     </div>
                   </div>
                   <div>
                     <div className="text-zinc-500">Precio</div>
-                    <div className="font-medium">{fmtMoney(best.price_eur)}</div>
+                    <div className="font-medium">
+                      {fmtMoney(best.price_eur)}
+                    </div>
                   </div>
                   <div>
                     <div className="text-zinc-500">Envío</div>
-                    <div className="font-medium">{fmtMoney(best.shipping_eur)}</div>
+                    <div className="font-medium">
+                      {fmtMoney(best.shipping_eur)}
+                    </div>
                   </div>
                   <div>
                     <div className="text-zinc-500">Prima</div>
-                    <div className="font-medium">{fmtPct(best.premium_pct)}</div>
+                    <div className="font-medium">
+                      {fmtPct(best.premium_pct)}
+                    </div>
                   </div>
                   <div>
                     <div className="text-zinc-500">Extraído</div>
                     <div className="font-medium">
                       {best.scraped_at
-                        ? new Date(best.scraped_at).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })
+                        ? new Date(best.scraped_at).toLocaleTimeString(
+                            "es-ES",
+                            { hour: "2-digit", minute: "2-digit" }
+                          )
                         : "—"}
                     </div>
                   </div>
@@ -378,13 +531,18 @@ export default async function ProductPage(
                   >
                     Comprar
                     <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden>
-                      <path fill="currentColor" d="M14 3h7v7h-2V6.41l-9.29 9.3-1.42-1.42 9.3-9.29H14V3ZM5 5h6v2H7v10h10v-4h2v6H5V5Z"/>
+                      <path
+                        fill="currentColor"
+                        d="M14 3h7v7h-2V6.41l-9.29 9.3-1.42-1.42 9.3-9.29H14V3ZM5 5h6v2H7v10h10v-4h2v6H5V5Z"
+                      />
                     </svg>
                   </a>
                 )}
               </div>
             ) : (
-              <div className="p-4 text-sm text-zinc-600">No hay ofertas activas ahora mismo.</div>
+              <div className="p-4 text-sm text-zinc-600">
+                No hay ofertas activas ahora mismo.
+              </div>
             )}
           </div>
 
@@ -392,7 +550,9 @@ export default async function ProductPage(
           <div className="relative overflow-hidden rounded-2xl border border-zinc-200/70 bg-white shadow-[0_12px_30px_rgba(0,0,0,0.06)]">
             <div className="absolute inset-x-0 top-0 h-1 bg-[hsl(var(--brand)/0.9)]" />
             <div className="p-3 md:p-4">
-              <h2 className="text-base md:text-lg font-semibold mb-2">Histórico (mejor precio diario)</h2>
+              <h2 className="text-base md:text-lg font-semibold mb-2">
+                Histórico (mejor precio diario)
+              </h2>
               <PriceChart data={history?.series ?? []} />
             </div>
           </div>
@@ -415,9 +575,12 @@ export default async function ProductPage(
 
       {/* Tabla de ofertas */}
       <section className="mt-8">
-        <h2 className="text-lg font-semibold">Todas las ofertas para este SKU</h2>
+        <h2 className="text-lg font-semibold">
+          Todas las ofertas para este SKU
+        </h2>
         <p className="text-sm text-zinc-600 mt-1">
-          Ordenadas por <em>total</em> (precio + envío). La primera fila coincide con la mejor oferta.
+          Ordenadas por <em>total</em> (precio + envío). La primera fila
+          coincide con la mejor oferta.
         </p>
 
         <div className="mt-3">
@@ -432,14 +595,31 @@ export default async function ProductPage(
 
       {/* JSON-LD */}
       {(() => {
-        const base = (process.env.NEXT_PUBLIC_SITE_URL || "").replace(/\/+$/, "");
-        const productUrl = base ? `${base}/producto/${canonicalSlug}` : undefined;
+        const base = (process.env.NEXT_PUBLIC_SITE_URL || "").replace(
+          /\/+$/,
+          ""
+        );
+        const canonicalSlug = productSlug({
+          metal: data.meta.metal,
+          form: data.meta.form,
+          weight_g: data.meta.weight_g,
+          weight_label: weightLbl,
+          weight_label_slug: weightLblSlug,
+          brand: data.meta.brand ?? null,
+          series: data.meta.series ?? null,
+          sku: data.sku,
+        });
+        const productUrl = base
+          ? `${base}/producto/${canonicalSlug}`
+          : undefined;
         const jsonLd: Record<string, any> = {
           "@context": "https://schema.org",
           "@type": "Product",
-          name: `${titleName(data.meta)} · ${weightLabel(data.meta.weight_g)}`,
+          name: `${titleName(data.meta)} · ${weightLbl}`,
           sku: data.sku,
-          brand: data.meta.brand ? { "@type": "Brand", name: data.meta.brand } : undefined,
+          brand: data.meta.brand
+            ? { "@type": "Brand", name: data.meta.brand }
+            : undefined,
           category: `${data.meta.metal}/${data.meta.form}`,
           url: productUrl,
           ...(jsonImagesAbs.length ? { image: jsonImagesAbs } : {}),

@@ -7,6 +7,12 @@ export type ProductSlugInput = {
   brand?: string | null;
   series?: string | null;
   sku: string;              // p. ej. "AU-500G-SEMPSA"
+
+  // 🆕 Opcionales para controlar el token de peso en la URL
+  // - weight_label: etiqueta humana ("1/2oz", "1/4oz", "2,5g", …)
+  // - weight_label_slug: etiqueta lista para URL ("1_2oz", "1_4oz", "2_5g", …)
+  weight_label?: string | null;
+  weight_label_slug?: string | null;
 };
 
 /** Normaliza strings a slug SEO (minúsculas, sin acentos, guiones simples). */
@@ -38,8 +44,15 @@ function formEs(f: string): string {
   return slugify(x);
 }
 
-/** Token de peso para la URL (1oz si es prácticamente 31.1035 g; si no, NNNg). */
-function weightToken(weight_g: number): string {
+/** Convierte etiqueta humana a token slug (p. ej. "1/2oz" -> "1_2oz", "2,5g" -> "2_5g"). */
+function weightLabelToSlug(label?: string | null): string {
+  const s = (label || "").trim();
+  if (!s) return "";
+  return s.replace(/\//g, "_").replace(/,/g, "_").toLowerCase();
+}
+
+/** Token de peso por defecto desde gramos (1oz, 100g, …). */
+function weightTokenFromGrams(weight_g: number): string {
   const w = Number(weight_g);
   if (!Number.isFinite(w) || w <= 0) return "";
   // 1 oz troy
@@ -59,7 +72,15 @@ function weightToken(weight_g: number): string {
 export function productSlug(input: ProductSlugInput): string {
   const form  = formEs(input.form);
   const metal = metalEs(input.metal);
-  const wt    = weightToken(input.weight_g);
+
+  // 🆕 Prioridad para el token de peso:
+  //  1) weight_label_slug (ya listo)
+  //  2) weight_label → lo convertimos a slug
+  //  3) derivar desde weight_g (lógica de siempre)
+  const wt =
+    (input.weight_label_slug && input.weight_label_slug.trim()) ? input.weight_label_slug.trim().toLowerCase() :
+    (input.weight_label && weightLabelToSlug(input.weight_label)) ||
+    weightTokenFromGrams(input.weight_g);
 
   // Preferimos serie para SEO; si no hay, usamos marca
   const main   = slugify(input.series) || slugify(input.brand);
