@@ -3,10 +3,11 @@
 export type SortKeySku =
   | "dealer"
   | "price"
-  | "shipping"
-  | "total"
   | "premium"
-  | "stock";
+  | "stock"
+  // nuevos keys específicos de la tabla de SKU
+  | "per_g" // precio por gramo (€/g)
+  | "diff"; // diferencia absoluta vs spot (€)
 
 export type SortDir = "asc" | "desc";
 

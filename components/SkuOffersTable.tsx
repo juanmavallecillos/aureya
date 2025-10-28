@@ -1,7 +1,6 @@
-// components/SkuOffersTable.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import VerifiedBadge from "@/components/VerifiedBadge";
 import PaginationControls from "@/components/table/PaginationControls";
 import SortableThSku, {
@@ -15,10 +14,10 @@ import Link from "next/link";
 /* ---------- Tipos ---------- */
 type Offer = {
   dealer_id: string;
-  price_eur: number | null;
-  shipping_eur: number | null;
-  total_eur: number | null;
-  premium_pct?: number | null;
+  price_eur: number | null; // producto (sin envío)
+  shipping_eur: number | null; // envío
+  total_eur: number | null; // producto + envío
+  premium_pct?: number | null; // puede venir en JSON; si no, la calculamos
   buy_url?: string | null;
   scraped_at?: string | null;
 };
@@ -34,6 +33,15 @@ type SpotDoc = {
 const OZ_TO_G = 31.1034768;
 
 /* ---------- Utils ---------- */
+const isFiniteNum = (v: unknown): v is number =>
+  typeof v === "number" && Number.isFinite(v);
+
+const toNumOrNull = (v: unknown): number | null => {
+  if (v === null || v === undefined) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+};
+
 const fmtMoney = (v: unknown) =>
   Number.isFinite(Number(v))
     ? new Intl.NumberFormat("es-ES", {
@@ -51,19 +59,30 @@ const premiumClass = (v: unknown) => {
   return "text-rose-600";
 };
 
+function normMetal(metal: string | undefined) {
+  const x = (metal || "").toLowerCase();
+  if (x === "oro" || x === "gold") return "gold";
+  if (x === "plata" || x === "silver") return "silver";
+  return x; // deja pasar otros metales si los hubiera
+}
+
 export default function SkuOffersTable({
   offers,
   dealers,
   pageSizeDefault = 10,
   spotInitial = null,
+  metal,
+  weight_g,
 }: {
   offers: Offer[];
   dealers: DealersMap;
   pageSizeDefault?: 10 | 25 | 50 | 100 | number;
   spotInitial?: SpotDoc | null;
+  metal: string; // REQUERIDO para calcular prima
+  weight_g: number; // REQUERIDO para calcular prima
 }) {
   /* -------- Orden/Paginación -------- */
-  const [sortKey, setSortKey] = useState<SortKeySku>("total");
+  const [sortKey, setSortKey] = useState<SortKeySku>("per_g");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [pageSize, setPageSize] = useState<number>(pageSizeDefault || 10);
   const [page, setPage] = useState<number>(1);
@@ -80,10 +99,94 @@ export default function SkuOffersTable({
   const getDealerLabel = (id: string) => dealers?.[id]?.label || id;
   const isDealerVerified = (id: string) => !!dealers?.[id]?.verified;
 
-  const sorted = useMemo(() => {
-    const norm = [...offers];
+  /* -------- Spot (global) -------- */
+  const spot = spotInitial;
+  const goldEurPerG = spot?.gold_eur_per_g ?? null;
+  const silverEurPerG = spot?.silver_eur_per_g ?? null;
+  const goldEurPerOz = goldEurPerG != null ? goldEurPerG * OZ_TO_G : null;
+  const silverEurPerOz = silverEurPerG != null ? silverEurPerG * OZ_TO_G : null;
+  const effectiveUpdatedAt = spot?.updated_at ?? null;
+  const spotLoading = !Boolean(spotInitial);
 
-    const num = (v: unknown) =>
+  // Elegimos spot €/g según metal normalizado
+  const chosenSpotPerG = useMemo(() => {
+    const m = normMetal(metal);
+    if (m === "silver") return silverEurPerG ?? null;
+    // por defecto oro
+    return goldEurPerG ?? null;
+  }, [metal, goldEurPerG, silverEurPerG]);
+
+  // Valor intrínseco del SKU (€/g * gramos)
+  const intrinsicValue = useMemo(() => {
+    const w = Number(weight_g);
+    const s = Number(chosenSpotPerG);
+    if (!Number.isFinite(w) || w <= 0 || !Number.isFinite(s) || s <= 0)
+      return null;
+    return s * w;
+  }, [weight_g, chosenSpotPerG]);
+
+  // Mapeamos ofertas con "prima efectiva": la del JSON si viene, y si no, la calculada sin envío (price_eur)
+  const offersWithPremium = useMemo(() => {
+    return offers.map((o) => {
+      const price_eur = toNumOrNull(o.price_eur);
+      const total_eur = toNumOrNull(o.total_eur);
+      const shipping_eur = toNumOrNull(o.shipping_eur);
+
+      // Derivar precio de producto SIN envío
+      const derivedPrice =
+        price_eur ??
+        (total_eur != null
+          ? shipping_eur != null
+            ? total_eur - shipping_eur
+            : total_eur
+          : null);
+
+      // Prima del JSON solo si es realmente un número (no null/undefined)
+      const jsonPremium = o.premium_pct;
+      const hasJsonPremium = isFiniteNum(jsonPremium as number);
+
+      // Cálculo de prima frente a valor intrínseco (spot €/g * gramos), SIN envío
+      let computed: number | null = null;
+      if (
+        intrinsicValue != null &&
+        intrinsicValue > 0 &&
+        derivedPrice != null
+      ) {
+        computed = ((derivedPrice - intrinsicValue) / intrinsicValue) * 100;
+      }
+
+      const effectivePremium = hasJsonPremium
+        ? (jsonPremium as number)
+        : computed;
+
+      // Precio por gramo (€/g) usando precio de producto sin envío
+      const per_g =
+        Number.isFinite(Number(weight_g)) && Number(weight_g) > 0 &&
+        derivedPrice != null
+          ? derivedPrice / Number(weight_g)
+          : null;
+
+      // Diferencia absoluta vs spot (€) usando precio sin envío
+      const diff =
+        intrinsicValue != null && derivedPrice != null
+          ? derivedPrice - intrinsicValue
+          : null;
+
+      return {
+        ...o,
+        price_effective: derivedPrice,
+        premium_computed: computed,
+        premium_effective: effectivePremium,
+        per_g,
+        diff,
+      };
+    });
+  }, [offers, intrinsicValue]);
+
+  const sorted = useMemo(() => {
+    const norm = [...offersWithPremium];
+
+    const numAsc = (v: unknown) =>
       Number.isFinite(Number(v)) ? Number(v) : Number.POSITIVE_INFINITY;
     const str = (v: unknown) => String(v ?? "").toLowerCase();
 
@@ -97,24 +200,24 @@ export default function SkuOffersTable({
           vb = str(getDealerLabel(b.dealer_id));
           break;
         case "price":
-          va = num(a.price_eur);
-          vb = num(b.price_eur);
+          va = numAsc(a.price_eur);
+          vb = numAsc(b.price_eur);
           break;
-        case "shipping":
-          va = num(a.shipping_eur);
-          vb = num(b.shipping_eur);
+        case "per_g":
+          va = numAsc((a as any).per_g);
+          vb = numAsc((b as any).per_g);
           break;
-        case "total":
-          va = num(a.total_eur);
-          vb = num(b.total_eur);
+        case "diff":
+          va = numAsc((a as any).diff);
+          vb = numAsc((b as any).diff);
           break;
         case "premium":
-          va = num(a.premium_pct);
-          vb = num(b.premium_pct);
+          va = numAsc((a as any).premium_effective);
+          vb = numAsc((b as any).premium_effective);
           break;
         default:
-          va = num(a.total_eur);
-          vb = num(b.total_eur);
+          va = numAsc(a.price_eur);
+          vb = numAsc(b.price_eur);
       }
 
       const base =
@@ -125,42 +228,13 @@ export default function SkuOffersTable({
     });
 
     return norm;
-  }, [offers, dealers, sortKey, sortDir]);
+  }, [offersWithPremium, dealers, sortKey, sortDir]);
 
   const totalRows = sorted.length;
   const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
   const start = (page - 1) * pageSize;
   const end = Math.min(start + pageSize, totalRows);
   const pageRows = sorted.slice(start, end);
-
-  /* -------- Spot (global) -------- */
-  // const [spot, setSpot] = useState<SpotDoc | null>(null);
-  // const [spotLoading, setSpotLoading] = useState<boolean>(true);
-
-  // useEffect(() => {
-  //   const ac = new AbortController();
-  //   const url = toAbsolute(cdnPath("meta/spot.json"));
-
-  //   setSpotLoading(true);
-  //   fetch(url, { cache: "no-store", signal: ac.signal })
-  //     .then((r) => (r.ok ? r.json() : null))
-  //     .then((doc: SpotDoc | null) => setSpot(doc))
-  //     .catch((err) => {
-  //       if (err?.name !== "AbortError") console.error("spot fetch error:", err);
-  //       setSpot(null);
-  //     })
-  //     .finally(() => setSpotLoading(false));
-
-  //   return () => ac.abort();
-  // }, []);
-
-  const [spot] = useState<SpotDoc | null>(spotInitial);
-  const [spotLoading] = useState<boolean>(!Boolean(spotInitial));
-  const goldEurPerG = spot?.gold_eur_per_g ?? null;
-  const silverEurPerG = spot?.silver_eur_per_g ?? null;
-  const goldEurPerOz = goldEurPerG != null ? goldEurPerG * OZ_TO_G : null;
-  const silverEurPerOz = silverEurPerG != null ? silverEurPerG * OZ_TO_G : null;
-  const effectiveUpdatedAt = spot?.updated_at ?? null;
 
   /* --------------------------------- RENDER --------------------------------- */
   return (
@@ -214,17 +288,8 @@ export default function SkuOffersTable({
                 w="w-28"
               />
               <SortableThSku
-                label="Envío"
-                k="shipping"
-                activeKey={sortKey}
-                dir={sortDir}
-                onSort={onSort}
-                align="center"
-                w="w-28"
-              />
-              <SortableThSku
-                label="Total"
-                k="total"
+                label="Dif. vs spot"
+                k="diff"
                 activeKey={sortKey}
                 dir={sortDir}
                 onSort={onSort}
@@ -232,7 +297,16 @@ export default function SkuOffersTable({
                 w="w-32"
               />
               <SortableThSku
-                label="Prima"
+                label="€/g"
+                k="per_g"
+                activeKey={sortKey}
+                dir={sortDir}
+                onSort={onSort}
+                align="center"
+                w="w-24"
+              />
+              <SortableThSku
+                label="Premium"
                 k="premium"
                 activeKey={sortKey}
                 dir={sortDir}
@@ -251,6 +325,11 @@ export default function SkuOffersTable({
               const rowKey = `${o.dealer_id}|${o.buy_url ?? ""}|${
                 o.total_eur ?? ""
               }|${o.scraped_at ?? ""}|${idx}`;
+
+              const premiumToShow = (o as any).premium_effective as
+                | number
+                | null;
+
               return (
                 <tr
                   key={rowKey}
@@ -270,24 +349,29 @@ export default function SkuOffersTable({
                       title={`Ficha de ${dealerLabel}`}
                     >
                       <span className="font-medium">{dealerLabel}</span>
-                      {verified ? <VerifiedBadge size={16} className="translate-y-[1px]" /> : null}
+                      {verified ? (
+                        <VerifiedBadge
+                          size={16}
+                          className="translate-y-[1px]"
+                        />
+                      ) : null}
                     </Link>
                   </td>
                   <td className="td text-center tabular-nums px-4 py-2.5">
                     {fmtMoney(o.price_eur)}
                   </td>
                   <td className="td text-center tabular-nums px-4 py-2.5">
-                    {fmtMoney(o.shipping_eur)}
+                    {fmtMoney((o as any).diff)}
                   </td>
-                  <td className="td text-center tabular-nums font-semibold text-zinc-900 px-4 py-2.5">
-                    {fmtMoney(o.total_eur)}
+                  <td className="td text-center tabular-nums px-4 py-2.5">
+                    {fmtMoney((o as any).per_g)}
                   </td>
                   <td
                     className={`td text-center tabular-nums px-4 py-2.5 ${premiumClass(
-                      o.premium_pct
+                      premiumToShow
                     )}`}
                   >
-                    {fmtPct(o.premium_pct)}
+                    {fmtPct(premiumToShow)}
                   </td>
                   <td className="td text-left px-4 py-2.5">
                     {o.buy_url ? (
@@ -301,7 +385,11 @@ export default function SkuOffersTable({
                           aria-label={`Comprar en ${dealerLabel}`}
                           title={`Comprar en ${dealerLabel}`}
                         >
-                          <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden>
+                          <svg
+                            viewBox="0 0 24 24"
+                            className="h-4 w-4"
+                            aria-hidden
+                          >
                             <path
                               fill="currentColor"
                               d="M14 3h7v7h-2V6.41l-9.29 9.3-1.42-1.42 9.3-9.29H14V3ZM5 5h6v2H7v10h10v-4h2v6H5V5Z"
@@ -348,7 +436,7 @@ export default function SkuOffersTable({
 
             {!pageRows.length && (
               <tr>
-                <td colSpan={7} className="td text-center text-zinc-500 py-8">
+                <td colSpan={6} className="td text-center text-zinc-500 py-8">
                   No hay ofertas disponibles para este SKU.
                 </td>
               </tr>
@@ -373,8 +461,8 @@ export default function SkuOffersTable({
         </div>
 
         <div className="px-3 py-2 text-xs text-zinc-600">
-          Nota: la prima se muestra sin envío. El coste de envío exacto se
-          confirma en la tienda.
+          Nota: el premium se muestra <strong>sin envío</strong>. El coste de
+          envío exacto se confirma en la tienda.
         </div>
       </div>
 
@@ -403,10 +491,10 @@ export default function SkuOffersTable({
               className="cursor-pointer rounded border px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--brand)/0.35)]"
               aria-label="Ordenar por"
             >
-              <option value="total">Total</option>
+              <option value="per_g">€/g</option>
+              <option value="diff">Dif. vs spot</option>
               <option value="price">Precio</option>
-              <option value="shipping">Envío</option>
-              <option value="premium">Prima</option>
+              <option value="premium">Premium</option>
               <option value="dealer">Tienda</option>
             </select>
 
@@ -453,13 +541,13 @@ export default function SkuOffersTable({
             <span className="font-medium">
               {
                 (
-                  {
-                    total: "Total",
+                  ({
+                    per_g: "€/g",
+                    diff: "Dif. vs spot",
                     price: "Precio",
-                    shipping: "Envío",
-                    premium: "Prima",
+                    premium: "Premium",
                     dealer: "Tienda",
-                  } as Record<SortKeySku, string>
+                  } as Record<SortKeySku, string>)
                 )[sortKey]
               }
             </span>{" "}
@@ -479,6 +567,8 @@ export default function SkuOffersTable({
           const tone =
             idx === 0 && start === 0 ? "bg-[hsl(var(--brand)/0.06)]" : "";
 
+          const premiumToShow = (o as any).premium_effective as number | null;
+
           return (
             <div key={key} className={`card p-4 ${tone}`}>
               <div className="flex items-start justify-between gap-3">
@@ -493,7 +583,9 @@ export default function SkuOffersTable({
                     >
                       {dealerLabel}
                     </Link>
-                    {verified && <VerifiedBadge size={16} className="translate-y-[1px]" />}
+                    {verified && (
+                      <VerifiedBadge size={16} className="translate-y-[1px]" />
+                    )}
                   </div>
                 </div>
 
@@ -509,7 +601,11 @@ export default function SkuOffersTable({
                         title={`Comprar en ${dealerLabel}`}
                       >
                         Comprar
-                        <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden>
+                        <svg
+                          viewBox="0 0 24 24"
+                          className="h-4 w-4"
+                          aria-hidden
+                        >
                           <path
                             fill="currentColor"
                             d="M14 3h7v7h-2V6.41l-9.29 9.3-1.42-1.42 9.3-9.29H14V3ZM5 5h6v2H7v10h10v-4h2v6H5V5Z"
@@ -556,36 +652,25 @@ export default function SkuOffersTable({
                   </div>
                 </div>
                 <div>
-                  <div className="text-zinc-500">Envío</div>
+                  <div className="text-zinc-500">€/g</div>
                   <div className="font-medium tabular-nums">
-                    {fmtMoney(o.shipping_eur)}
+                    {fmtMoney((o as any).per_g)}
                   </div>
                 </div>
                 <div>
-                  <div className="text-zinc-500">Total</div>
-                  <div className="font-semibold tabular-nums text-zinc-900">
-                    {fmtMoney(o.total_eur)}
+                  <div className="text-zinc-500">Dif. vs spot</div>
+                  <div className="font-medium tabular-nums">
+                    {fmtMoney((o as any).diff)}
                   </div>
                 </div>
                 <div>
-                  <div className="text-zinc-500">Prima</div>
+                  <div className="text-zinc-500">Premium</div>
                   <div
                     className={`font-medium tabular-nums ${premiumClass(
-                      o.premium_pct
+                      premiumToShow
                     )}`}
                   >
-                    {fmtPct(o.premium_pct)}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-zinc-500">Extraído</div>
-                  <div className="font-medium">
-                    {o.scraped_at
-                      ? new Date(o.scraped_at).toLocaleTimeString("es-ES", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })
-                      : "—"}
+                    {fmtPct(premiumToShow)}
                   </div>
                 </div>
               </div>
@@ -617,8 +702,8 @@ export default function SkuOffersTable({
         </div>
 
         <div className="px-3 pb-2 text-xs text-zinc-600">
-          <span className="opacity-80">Nota:</span> la prima se muestra sin
-          envío.
+          <span className="opacity-80">Nota:</span> el premium se muestra{" "}
+          <strong>sin envío</strong>.
         </div>
       </div>
     </>

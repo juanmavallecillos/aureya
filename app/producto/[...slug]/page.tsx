@@ -271,7 +271,7 @@ export async function generateMetadata({
 
   return {
     title,
-    description: `Mejores ofertas, prima y evolución de precio para ${name} (${weightLbl}). Datos actualizados y tiendas verificadas.`,
+    description: `Mejores ofertas, premium y evolución de precio para ${name} (${weightLbl}). Datos actualizados y tiendas verificadas.`,
     alternates: { canonical },
     openGraph: { url: canonical, title, type: "website" },
     twitter: {
@@ -443,12 +443,12 @@ export default async function ProductPage({
         }}
       >
         <h2 className="text-lg md:text-xl font-semibold text-zinc-900">
-          Mejor precio y prima frente al <em>spot</em>
+          Mejor precio y premium frente al <em>spot</em>
         </h2>
         <p className="mt-1 text-sm text-zinc-700">
           Esta ficha muestra <strong>mejor oferta</strong>, histórico diario y
           todas las ofertas disponibles para este SKU en tiendas verificadas.
-          Calculamos la <strong>prima</strong> sobre el valor intrínseco (€/g y
+          Calculamos el <strong>premium</strong> sobre el valor intrínseco (€/g y
           €/oz) para comparar de forma homogénea.
         </p>
       </section>
@@ -465,80 +465,123 @@ export default async function ProductPage({
             </div>
 
             {best ? (
-              <div className="p-4 md:p-5 flex flex-col sm:flex-row sm:items-center gap-4">
-                <div className="shrink-0">
-                  <div className="text-[22px] md:text-2xl font-extrabold leading-none text-zinc-900">
-                    {fmtMoney(best.total_eur)}
-                  </div>
-                  <div className="mt-0.5 text-xs text-zinc-500">
-                    Total (producto + envío)
-                  </div>
-                </div>
+              (() => {
+                // Spot €/g según metal
+                const spotPerGram =
+                  data.meta.metal.toLowerCase() === "plata" ||
+                  data.meta.metal.toLowerCase() === "silver"
+                    ? spot?.silver_eur_per_g ?? 0
+                    : spot?.gold_eur_per_g ?? 0;
 
-                <div className="flex-1 grid sm:grid-cols-3 gap-3 text-sm text-zinc-700">
-                  <div>
-                    <div className="text-zinc-500">Tienda</div>
-                    <div className="font-medium flex items-center gap-1">
-                      {getDealerLabel(best.dealer_id)}
-                      {isDealerVerified(best.dealer_id) && (
-                        <VerifiedBadge
-                          size={18}
-                          className="translate-y-[1px]"
-                        />
+                const weightG = Number(data.meta.weight_g ?? 0);
+
+                // Precio del producto SIN envío (si price_eur no viene, lo derivamos)
+                const productPrice = Number.isFinite(Number(best.price_eur))
+                  ? Number(best.price_eur)
+                  : Number.isFinite(Number(best.total_eur))
+                  ? Number(best.total_eur) - Number(best.shipping_eur ?? 0)
+                  : null;
+
+                // Intrínseco y métricas
+                const intrinsicValue = spotPerGram * weightG; // €/g * g
+                const pricePerG =
+                  productPrice != null && weightG > 0
+                    ? productPrice / weightG
+                    : null;
+
+                // Premium (sin envío)
+                const computedPremiumPct =
+                  intrinsicValue > 0 && productPrice != null
+                    ? ((productPrice - intrinsicValue) / intrinsicValue) * 100
+                    : null;
+
+                const premiumToShow =
+                  best.premium_pct ?? computedPremiumPct ?? null;
+
+                return (
+                  <>
+                    <div className="p-4 md:p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+                      {/* Total grande */}
+                      <div className="shrink-0">
+                        <div className="text-[22px] md:text-2xl font-extrabold leading-none text-zinc-900">
+                          {fmtMoney(best.total_eur)}
+                        </div>
+                      </div>
+
+                      {/* Datos clave */}
+                      <div className="flex-1 grid sm:grid-cols-3 gap-3 text-sm text-zinc-700">
+                        <div>
+                          <div className="text-zinc-500">Tienda</div>
+                          <div className="font-medium flex items-center gap-1">
+                            {getDealerLabel(best.dealer_id)}
+                            {isDealerVerified(best.dealer_id) && (
+                              <VerifiedBadge
+                                size={18}
+                                className="translate-y-[1px]"
+                              />
+                            )}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="text-zinc-500">Precio</div>
+                          <div className="font-medium">
+                            {fmtMoney(productPrice)}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="text-zinc-500">Premium</div>
+                          <div className="font-medium">
+                            {fmtPct(premiumToShow)}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="text-zinc-500">€/g</div>
+                          <div className="font-medium tabular-nums">
+                            {pricePerG != null && Number.isFinite(pricePerG)
+                              ? `${pricePerG.toFixed(2)} €/g`
+                              : "—"}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* CTA */}
+                      {best.buy_url && (
+                        <a
+                          href={best.buy_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center justify-center gap-1 rounded-lg px-4 py-2 text-sm font-medium
+                         bg-[hsl(var(--brand))] text-white hover:opacity-90 focus-visible:ring-2
+                         focus-visible:ring-[hsl(var(--brand)/0.35)] w-full sm:w-auto"
+                          aria-label={`Comprar en ${getDealerLabel(
+                            best.dealer_id
+                          )}`}
+                        >
+                          Comprar
+                          <svg
+                            viewBox="0 0 24 24"
+                            className="h-4 w-4"
+                            aria-hidden
+                          >
+                            <path
+                              fill="currentColor"
+                              d="M14 3h7v7h-2V6.41l-9.29 9.3-1.42-1.42 9.3-9.29H14V3ZM5 5h6v2H7v10h10v-4h2v6H5V5Z"
+                            />
+                          </svg>
+                        </a>
                       )}
                     </div>
-                  </div>
-                  <div>
-                    <div className="text-zinc-500">Precio</div>
-                    <div className="font-medium">
-                      {fmtMoney(best.price_eur)}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-zinc-500">Envío</div>
-                    <div className="font-medium">
-                      {fmtMoney(best.shipping_eur)}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-zinc-500">Prima</div>
-                    <div className="font-medium">
-                      {fmtPct(best.premium_pct)}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-zinc-500">Extraído</div>
-                    <div className="font-medium">
-                      {best.scraped_at
-                        ? new Date(best.scraped_at).toLocaleTimeString(
-                            "es-ES",
-                            { hour: "2-digit", minute: "2-digit" }
-                          )
-                        : "—"}
-                    </div>
-                  </div>
-                </div>
 
-                {best.buy_url && (
-                  <a
-                    href={best.buy_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center justify-center gap-1 rounded-lg px-4 py-2 text-sm font-medium
-                              bg-[hsl(var(--brand))] text-white hover:opacity-90 focus-visible:ring-2
-                              focus-visible:ring-[hsl(var(--brand)/0.35)] w-full sm:w-auto"
-                    aria-label={`Comprar en ${getDealerLabel(best.dealer_id)}`}
-                  >
-                    Comprar
-                    <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden>
-                      <path
-                        fill="currentColor"
-                        d="M14 3h7v7h-2V6.41l-9.29 9.3-1.42-1.42 9.3-9.29H14V3ZM5 5h6v2H7v10h10v-4h2v6H5V5Z"
-                      />
-                    </svg>
-                  </a>
-                )}
-              </div>
+                    {/* Nota de envío */}
+                    <div className="px-4 pb-4 -mt-2 text-xs text-zinc-600">
+                      Nota: el envío se confirma en la tienda.
+                    </div>
+                  </>
+                );
+              })()
             ) : (
               <div className="p-4 text-sm text-zinc-600">
                 No hay ofertas activas ahora mismo.
@@ -579,7 +622,7 @@ export default async function ProductPage({
           Todas las ofertas para este SKU
         </h2>
         <p className="text-sm text-zinc-600 mt-1">
-          Ordenadas por <em>total</em> (precio + envío). La primera fila
+          Ordenadas por <em>precio €/g más barato</em>. La primera fila
           coincide con la mejor oferta.
         </p>
 
@@ -589,6 +632,8 @@ export default async function ProductPage({
             dealers={dealers}
             pageSizeDefault={10}
             spotInitial={spot}
+            metal={data.meta.metal}
+            weight_g={data.meta.weight_g}
           />
         </div>
       </section>
