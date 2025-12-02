@@ -25,7 +25,12 @@ export type Offer = {
 };
 
 /* ---------- Helpers locales (ligeros) ---------- */
-const niceMetal: Record<string, string> = { gold: "Oro", silver: "Plata", platinum: "Platino", palladium: "Paladio" };
+const niceMetal: Record<string, string> = {
+  gold: "Oro",
+  silver: "Plata",
+  platinum: "Platino",
+  palladium: "Paladio",
+};
 const niceForm: Record<string, string> = { bar: "Lingote", coin: "Moneda" };
 
 const OZ_TO_G = 31.1034768;
@@ -51,12 +56,12 @@ const BUCKET_TARGET_G: Record<string, number> = {
   "2g": 2,
   "2,5g": 2.5,
   "5g": 5,
-  "1/4oz": OZ_TO_G / 4,   // ~7.776 g
+  "1/4oz": OZ_TO_G / 4, // ~7.776 g
   "10g": 10,
-  "1/2oz": OZ_TO_G / 2,   // ~15.552 g
+  "1/2oz": OZ_TO_G / 2, // ~15.552 g
   "20g": 20,
   "25g": 25,
-  "1oz": OZ_TO_G,         // ~31.103 g
+  "1oz": OZ_TO_G, // ~31.103 g
   "50g": 50,
   "100g": 100,
   "250g": 250,
@@ -108,30 +113,53 @@ const tailFromSku = (sku: string) => {
   return parts.length > 2 ? parts.slice(2).join(" ") : "";
 };
 const toTitle = (s: string) =>
-  s.toLowerCase().replace(/[_\-]+/g, " ").replace(/\b([a-z])/g, (m) => m.toUpperCase());
+  s
+    .toLowerCase()
+    .replace(/[_\-]+/g, " ")
+    .replace(/\b([a-z])/g, (m) => m.toUpperCase());
 
-function displayName(o: Offer): string {
-  if (o.display_name) return o.display_name;
+function displayNameParts(o: Offer): {
+  primary: string;
+  secondary?: string;
+  title: string;
+} {
   const brand = (o.brand || "").trim();
   const series = (o.series || "").trim();
-  if (series) return brand ? `${series} — ${brand}` : series;
-  if (o.form === "coin") {
-    const tail = toTitle(tailFromSku(o.sku));
-    if (tail && brand) return `${tail} — ${brand}`;
-    if (tail) return tail;
-    if (brand) return brand;
-    return "Moneda";
+
+  // 1) Tenemos serie → serie arriba, marca debajo
+  if (series) {
+    const primary = series;
+    const secondary = brand || undefined;
+    const title = secondary ? `${primary} — ${secondary}` : primary;
+    return { primary, secondary, title };
   }
-  if (brand) return brand;
+
+  // 2) Sin serie pero con marca → solo marca (SEMPSA, Argor-Heraeus…)
+  if (brand) {
+    return { primary: brand, title: brand };
+  }
+
+  // 3) Sin serie ni marca → usamos el tail del SKU o fallback Moneda/Lingote
   const tail = toTitle(tailFromSku(o.sku));
-  return tail || "Lingote";
+
+  if (o.form === "coin") {
+    const primary = tail || "Moneda";
+    return { primary, title: primary };
+  }
+
+  const primary = tail || "Lingote";
+  return { primary, title: primary };
 }
 
 const fmtMoney = (v: unknown) =>
   Number.isFinite(Number(v))
-    ? new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(Number(v))
+    ? new Intl.NumberFormat("es-ES", {
+        style: "currency",
+        currency: "EUR",
+      }).format(Number(v))
     : "—";
-const fmtPct = (v: unknown) => (Number.isFinite(Number(v)) ? `${Number(v).toFixed(2)}%` : "—");
+const fmtPct = (v: unknown) =>
+  Number.isFinite(Number(v)) ? `${Number(v).toFixed(2)}%` : "—";
 
 function premiumClass(pct: unknown) {
   const v = Number(pct);
@@ -159,30 +187,50 @@ export default function OffersRow({
   const pathname = usePathname();
   const isDealerPage =
     !!pathname &&
-    (pathname.startsWith(`/tienda/${o.dealer_id}`) || pathname.startsWith(`/tiendas/${o.dealer_id}`));
+    (pathname.startsWith(`/tienda/${o.dealer_id}`) ||
+      pathname.startsWith(`/tiendas/${o.dealer_id}`));
 
   // 🆕 Etiquetas de tamaño para URL y SKU
-  const bucketLabel = bucketFromWeight(o.weight_g);     // p.ej. "1/2oz"
-  const bucketSlug  = toBucketSlug(bucketLabel);        // p.ej. "1_2oz"
-  const skuForUrl   = toSkuUrl(o.sku);                  // p.ej. "AU-1_2OZ-HAFNER"
+  const bucketLabel = bucketFromWeight(o.weight_g); // p.ej. "1/2oz"
+  const bucketSlug = toBucketSlug(bucketLabel); // p.ej. "1_2oz"
+  const skuForUrl = toSkuUrl(o.sku); // p.ej. "AU-1_2OZ-HAFNER"
 
   return (
     <tr
       className={[
         idx % 2 === 0 ? "bg-white" : "bg-zinc-50/30",
         idx === 0 && page === 1 ? "bg-[hsl(var(--brand)/0.08)]" : "",
-        "hover:bg-zinc-50 transition-colors"
+        "hover:bg-zinc-50 transition-colors",
       ].join(" ")}
     >
-      <td className="td text-center text-zinc-800">{niceMetal[o.metal] ?? o.metal}</td>
-      <td className="td text-center text-zinc-800">{niceForm[o.form] ?? o.form}</td>
+      <td className="td text-center text-zinc-800">
+        {niceMetal[o.metal] ?? o.metal}
+      </td>
+      <td className="td text-center text-zinc-800">
+        {niceForm[o.form] ?? o.form}
+      </td>
       <td className="td text-center text-zinc-800">{bucketLabel}</td>
 
       <td className="td">
         <div className="flex min-w-0 items-center gap-2">
-          <span className="font-medium truncate max-w-[460px] text-zinc-900" title={displayName(o)}>
-            {displayName(o)}
-          </span>
+          {(() => {
+            const name = displayNameParts(o);
+            return (
+              <div
+                className="flex flex-col min-w-0 max-w-[220px] md:max-w-[260px] leading-tight"
+                title={name.title}
+              >
+                <span className="font-semibold text-sm text-zinc-900 truncate">
+                  {name.primary}
+                </span>
+                {name.secondary && (
+                  <span className="text-xs text-zinc-500 truncate">
+                    {name.secondary}
+                  </span>
+                )}
+              </div>
+            );
+          })()}
         </div>
       </td>
 
@@ -211,7 +259,10 @@ export default function OffersRow({
             title="Ver ficha (histórico y mejores ofertas)"
           >
             <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden>
-              <path fill="currentColor" d="M12 5c-5 0-9 4.5-9 7s4 7 9 7 9-4.5 9-7-4-7-9-7Zm0 12c-2.8 0-5-2.24-5-5s2.2-5 5-5 5 2.24 5 5-2.2 5-5 5Zm0-8a3 3 0 1 0 .002 6.002A3 3 0 0 0 12 9Z"/>
+              <path
+                fill="currentColor"
+                d="M12 5c-5 0-9 4.5-9 7s4 7 9 7 9-4.5 9-7-4-7-9-7Zm0 12c-2.8 0-5-2.24-5-5s2.2-5 5-5 5 2.24 5 5-2.2 5-5 5Zm0-8a3 3 0 1 0 .002 6.002A3 3 0 0 0 12 9Z"
+              />
             </svg>
             <span>Ver</span>
           </Link>
@@ -222,15 +273,17 @@ export default function OffersRow({
         {fmtMoney(o.price_eur)}
       </td>
 
-      <td className={`td text-center whitespace-nowrap tabular-nums ${premiumClass(premiumPct)}`}>
+      <td
+        className={`td text-center whitespace-nowrap tabular-nums ${premiumClass(
+          premiumPct
+        )}`}
+      >
         {fmtPct(premiumPct)}
       </td>
 
       <td className="td text-left">
         {o.buy_url ? (
-          <div
-            className="flex items-center gap-2 justify-end w-[228px]"
-          >
+          <div className="flex items-center gap-2 justify-end w-[228px]">
             <a
               href={o.buy_url}
               target="_blank"
@@ -241,7 +294,10 @@ export default function OffersRow({
                         focus:outline-none btn-brand whitespace-nowrap flex-1"
             >
               <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden>
-                <path fill="currentColor" d="M14 3h7v7h-2V6.41l-9.29 9.3-1.42-1.42 9.3-9.29H14V3ZM5 5h6v2H7v10h10v-4h2v6H5V5Z"/>
+                <path
+                  fill="currentColor"
+                  d="M14 3h7v7h-2V6.41l-9.29 9.3-1.42-1.42 9.3-9.29H14V3ZM5 5h6v2H7v10h10v-4h2v6H5V5Z"
+                />
               </svg>
               {dealerLabel}
             </a>
