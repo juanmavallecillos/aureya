@@ -126,7 +126,10 @@ function isKnownPath(pathname: string): boolean {
 
   // /{oro|plata}/{lingotes|monedas}/{bucket}
   // bucket válido: "1oz" o "<n>g" (n admite decimales opcionales)
-  if (/^\/(oro|plata)\/(lingotes|monedas)\/(1oz|[0-9]+(\.[0-9]+)?g)$/.test(pathname)) return true;
+  if (
+    /^\/(oro|plata)\/(lingotes|monedas)\/(1oz|[0-9]+(?:\.[0-9]+)?g|[0-9]+(?:\.[0-9]+)?kg)$/
+      .test(pathname)
+  ) return true;
 
   return false;
 }

@@ -17,14 +17,26 @@ const toFormToken = (f?: string) => {
   if (["moneda", "monedas", "coin"].includes(x)) return "coin";
   return "";
 };
+
 // bucket: aceptamos “1oz” tal cual y “100g/1kg/…” tal cual.
-// Si viniera “1kg” lo canonizamos a “1000g”; “100” -> “100g”.
+// Normalizamos 1000g ↔ 1kg para que todo el front use "1kg".
 const normalizeBucket = (b?: string) => {
-  const x = (b || "").toLowerCase();
+  const x = (b || "").toLowerCase().trim();
   if (!x) return "";
-  if (x === "1oz" || x.endsWith("oz")) return x; // oz tal cual
-  if (x === "1kg") return "1000g";
-  return x.endsWith("g") ? x : `${x}g`;
+
+  // Onzas tal cual
+  if (x === "1oz" || x.endsWith("oz")) return x;
+
+  // 1kg / 1000g → usamos siempre "1kg"
+  if (x === "1kg" || x === "1000g" || x === "1000") return "1kg";
+
+  // Si viene "100g", "50g", etc. lo dejamos tal cual
+  if (x.endsWith("g")) return x;
+
+  // Si viene solo el número ("100" -> "100g")
+  if (/^\d+$/.test(x)) return `${x}g`;
+
+  return x;
 };
 
 const niceMetal: Record<string, string> = { gold: "Oro", silver: "Plata" };
@@ -35,10 +47,24 @@ type OfferLite = { metal: string; form: string; weight_g: number };
 type AllIndexDoc = { offers?: OfferLite[] };
 
 const OZ_TO_G = 31.1034768;
+
 const bucketFromWeight = (g: number) => {
-  if (Math.abs(g - OZ_TO_G) < 0.05) return "1oz";
+  if (!Number.isFinite(g) || g <= 0) return "";
+
+  // 1oz
+  if (Math.abs(g - OZ_TO_G) < 0.5) return "1oz";
+
   const specials = [1, 2, 2.5, 5, 10, 20, 50, 100, 250, 500, 1000];
-  for (const s of specials) if (Math.abs(g - s) < 0.2) return `${s}g`;
+
+  for (const s of specials) {
+    if (Math.abs(g - s) < 0.5) {
+      // Único caso especial: 1000g => "1kg"
+      if (s === 1000) return "1kg";
+      return `${s}g`;
+    }
+  }
+
+  // Fallback genérico
   return `${Math.round(g)}g`;
 };
 
