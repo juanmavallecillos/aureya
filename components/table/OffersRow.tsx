@@ -36,14 +36,22 @@ const niceForm: Record<string, string> = { bar: "Lingote", coin: "Moneda" };
 const OZ_TO_G = 31.1034768;
 
 const BUCKETS_ORDER: string[] = [
+  "1g",
+  "1/20oz",
   "2g",
   "2,5g",
+  "3g",
+  "1/10oz",
   "5g",
   "1/4oz",
+  "7,98g",
+  "8g",
   "10g",
+  "15g",
   "1/2oz",
   "20g",
   "25g",
+  "30g",
   "1oz",
   "50g",
   "100g",
@@ -53,15 +61,23 @@ const BUCKETS_ORDER: string[] = [
 ];
 
 const BUCKET_TARGET_G: Record<string, number> = {
+  "1g": 1,
+  "1/20oz": OZ_TO_G / 20,
   "2g": 2,
   "2,5g": 2.5,
+  "3g": 3,
+  "1/10oz": OZ_TO_G / 10,
   "5g": 5,
-  "1/4oz": OZ_TO_G / 4, // ~7.776 g
+  "1/4oz": OZ_TO_G / 4,
+  "7,98g": 7.98,
+  "8g": 8,
   "10g": 10,
-  "1/2oz": OZ_TO_G / 2, // ~15.552 g
+  "15g": 15,
+  "1/2oz": OZ_TO_G / 2,
   "20g": 20,
   "25g": 25,
-  "1oz": OZ_TO_G, // ~31.103 g
+  "30g": 30,
+  "1oz": OZ_TO_G,
   "50g": 50,
   "100g": 100,
   "250g": 250,
@@ -70,20 +86,28 @@ const BUCKET_TARGET_G: Record<string, number> = {
 };
 
 const TOL_G: Record<string, number> = {
-  "2g": 0.2,
-  "2,5g": 0.2,
-  "5g": 0.3,
-  "1/4oz": 0.25,
-  "10g": 0.4,
-  "1/2oz": 0.4,
-  "20g": 0.6,
-  "25g": 0.6,
-  "1oz": 0.6,
-  "50g": 1.0,
-  "100g": 2.0,
-  "250g": 3.0,
-  "500g": 5.0,
-  "1kg": 8.0,
+  "1g": 0.01,
+  "1/20oz": 0.01,
+  "2g": 0.01,
+  "2,5g": 0.01,
+  "3g": 0.01,
+  "1/10oz": 0.01,
+  "5g": 0.01,
+  "1/4oz": 0.01,
+  "7,98g": 0.01,
+  "8g": 0.01,
+  "10g": 0.01,
+  "15g": 0.01,
+  "1/2oz": 0.01,
+  "20g": 0.01,
+  "25g": 0.01,
+  "30g": 0.01,
+  "1oz": 0.01,
+  "50g": 0.01,
+  "100g": 0.01,
+  "250g": 0.01,
+  "500g": 0.01,
+  "1kg": 0.01,
 };
 
 export const bucketFromWeight = (weight_g: unknown): string => {
