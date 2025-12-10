@@ -9,6 +9,6 @@ export async function POST(req: NextRequest) {
   }
   const body = await req.json().catch(() => ({} as any));
   const tags = Array.isArray(body?.tags) ? body.tags : [];
-  for (const t of tags) revalidateTag(t);
+  for (const t of tags) revalidateTag(t, "max");
   return NextResponse.json({ ok: true, revalidated: tags });
 }
