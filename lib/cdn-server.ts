@@ -6,7 +6,8 @@ import "server-only";
  * Ej: NEXT_PUBLIC_CDN_BASE=https://staging-cdn.aureya.es
  */
 const CDN_BASE =
-  process.env.NEXT_PUBLIC_CDN_BASE?.replace(/\/+$/, "") || "https://cdn.aureya.es";
+  process.env.NEXT_PUBLIC_CDN_BASE?.replace(/\/+$/, "") ||
+  "https://cdn.aureya.es";
 
 /** Construye una URL ABSOLUTA al CDN desde una ruta relativa o una URL ya absoluta. */
 function cdnUrl(pathOrUrl: string): string {
@@ -16,13 +17,48 @@ function cdnUrl(pathOrUrl: string): string {
   return `${CDN_BASE}/${clean}`;
 }
 
+/* ============================================================================
+ * Opciones de fetch para helpers de servidor
+ * ============================================================================
+ */
+
+export type FetchOpts = {
+  /** Revalidate en segundos (Next data cache). */
+  revalidate?: number;
+  /** Tags para revalidateTag. */
+  tags?: string[];
+  /**
+   * Control de caché explícito de Next.
+   * Si se pasa `cache`, NO se aplica `next: { revalidate, tags }`.
+   * Ejemplo típico: cache: "no-store"
+   */
+  cache?: RequestCache; // "default" | "no-store" | "force-cache" | ...
+};
+
 /** Fetch directo al CDN (sin proxy /api/cdn) y compatible con ISR. */
 async function fetchFromCdn(path: string, opts: FetchOpts = {}) {
-  const init: RequestInit = (opts.revalidate != null || opts.tags?.length)
-    ? ({ next: { revalidate: opts.revalidate, tags: opts.tags } } as any)
-    : { cache: "no-store" };
-
   const url = cdnUrl(path); // usa https://cdn.aureya.es/...
+
+  const { revalidate, tags, cache } = opts;
+
+  const init: RequestInit & {
+    next?: { revalidate?: number; tags?: string[] };
+  } = {};
+
+  if (cache) {
+    // Si especificas cache (p.ej. "no-store"), dejamos que eso mande.
+    init.cache = cache;
+  } else if (revalidate != null || (tags && tags.length)) {
+    // Sin cache explícito: usamos sistema de Next (data cache) si hay revalidate/tags.
+    const nextOpts: { revalidate?: number; tags?: string[] } = {};
+    if (revalidate != null) nextOpts.revalidate = revalidate;
+    if (tags && tags.length) nextOpts.tags = tags;
+    init.next = nextOpts;
+  } else {
+    // Por defecto (ningún hint): no-store para leer siempre lo último del CDN.
+    init.cache = "no-store";
+  }
+
   return fetch(url, init);
 }
 
@@ -30,11 +66,13 @@ async function fetchFromCdn(path: string, opts: FetchOpts = {}) {
  * API pública (mantenemos nombres y tipos para evitar cambios en el resto del código)
  * ================================================================================= */
 
-type FetchOpts = { revalidate?: number; tags?: string[] };
-
-export async function fetchJsonServer<T>(path: string, opts: FetchOpts = {}): Promise<T> {
+export async function fetchJsonServer<T>(
+  path: string,
+  opts: FetchOpts = {}
+): Promise<T> {
   const res = await fetchFromCdn(path, opts);
-  if (!res.ok) throw new Error(`CDN ${res.status} ${res.statusText} :: ${cdnUrl(path)}`);
+  if (!res.ok)
+    throw new Error(`CDN ${res.status} ${res.statusText} :: ${cdnUrl(path)}`);
   return (await res.json()) as T;
 }
 
@@ -47,14 +85,21 @@ export async function fetchJsonOrNullServer<T>(
     if (!res.ok) return null;
     return (await res.json()) as T;
   } catch (err) {
-    console.error("[cdn] fetchJsonOrNullServer error:", (err as Error)?.message || err);
+    console.error(
+      "[cdn] fetchJsonOrNullServer error:",
+      (err as Error)?.message || err
+    );
     return null;
   }
 }
 
-export async function fetchTextServer(path: string, opts: FetchOpts = {}): Promise<string> {
+export async function fetchTextServer(
+  path: string,
+  opts: FetchOpts = {}
+): Promise<string> {
   const res = await fetchFromCdn(path, opts);
-  if (!res.ok) throw new Error(`CDN ${res.status} ${res.statusText} :: ${cdnUrl(path)}`);
+  if (!res.ok)
+    throw new Error(`CDN ${res.status} ${res.statusText} :: ${cdnUrl(path)}`);
   return await res.text();
 }
 
@@ -78,4 +123,3 @@ export function toAbsolute(url: string) {
     "http://127.0.0.1:3000";
   return new URL(url, base).toString();
 }
-

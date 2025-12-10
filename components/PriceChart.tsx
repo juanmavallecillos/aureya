@@ -308,7 +308,7 @@ export default function PriceChart({ data }: { data: Pt[] }) {
               />
               <YAxis
                 tick={{ fontSize: 12, fill: "#374151" }}
-                width={56}
+                width={72}
                 tickFormatter={(v: any) => eur(Number(v))}
                 domain={domainY}
                 axisLine={{ stroke: "#e5e7eb" }}

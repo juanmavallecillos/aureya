@@ -254,8 +254,7 @@ export async function generateMetadata({
   const sku = extractSkuFromSlugParam(slug);
 
   const data = await fetchJsonOrNull<SkuDoc>(`/prices/sku/${sku}.json`, {
-    revalidate: 7200,
-    tags: [`sku:${sku}`],
+    cache: "no-store",
   });
   const meta = data?.meta;
   if (!meta) return { title: sku };
@@ -354,8 +353,7 @@ export default async function ProductPage({
 
   // 3) Histórico
   const history = (await fetchJsonOrNull<HistDoc>(`/history/${sku}.json`, {
-    revalidate: 43200, // 12 h
-    tags: [`history:${sku}`],
+    cache: "no-store",
   }).catch(() => ({ sku, series: [] as HistDoc["series"] }))) ?? {
     sku,
     series: [],
@@ -390,8 +388,7 @@ export default async function ProductPage({
 
   // 7) Spot GLOBAL (servidor) → prop a la tabla
   const spot = await fetchJsonOrNull<SpotDoc>("meta/spot.json", {
-    revalidate: 7200, // 2 h
-    tags: ["spot"],
+    cache: "no-store",
   });
 
   /* 8) GALERÍA */
