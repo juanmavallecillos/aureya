@@ -50,7 +50,6 @@ type HistDoc = {
   series: { date: string; best_total_eur: number | null }[];
 };
 type DealersMap = Record<string, { label: string; verified?: boolean }>;
-type MediaIndex = Record<string, string[]>;
 
 // Spot global (lo leemos desde meta/spot.json en el servidor)
 type SpotDoc = {
@@ -203,32 +202,45 @@ function Chip({ children }: { children: React.ReactNode }) {
   );
 }
 
-/* ---------- Helpers media ---------- */
-function selectPreferredImages(paths: string[]) {
-  const map = new Map<string, { w600?: string; w1200?: string }>();
-  for (const p of paths) {
-    const m = p.match(/(.+)-(600|1200)\.(webp|avif|jpe?g|png)$/i);
-    if (!m) continue;
-    const base = m[1];
-    const size = m[2];
-    const prev = map.get(base) || {};
-    if (size === "600") prev.w600 = p;
-    if (size === "1200") prev.w1200 = p;
-    map.set(base, prev);
+/* ---------- Helpers media (CDN) ---------- */
+
+/**
+ * Dada un SKU, comprueba si existen front-600.webp y back-600.webp
+ * en el CDN, siguiendo la convención:
+ *   media/{SKU}/front-600.webp
+ *   media/{SKU}/back-600.webp
+ *
+ * Devuelve un array de paths relativos (no URLs absolutas), en orden:
+ * front primero (si existe), luego back (si existe).
+ */
+async function getSkuGalleryImages(sku: string): Promise<string[]> {
+  const candidates = [
+    `media/${sku}/front-600.webp`,
+    `media/${sku}/back-600.webp`,
+  ];
+
+  const result: string[] = [];
+
+  // HEAD contra el CDN para ver si existe el fichero
+  for (const relPath of candidates) {
+    const url = cdnPath(relPath);
+    try {
+      const res = await fetch(url, {
+        method: "HEAD",
+        // cacheo razonable: no hace falta comprobar en cada request
+        next: { revalidate: 3600, tags: [`media:${sku}`] },
+      });
+      if (res.ok) {
+        result.push(relPath);
+      }
+    } catch {
+      // si falla el fetch, simplemente lo ignoramos
+    }
   }
-  const entries = Array.from(map.entries()).sort(([a], [b]) => {
-    const pa = a.toLowerCase(),
-      pb = b.toLowerCase();
-    const af = pa.includes("front") || pa.includes("anverso") ? -1 : 0;
-    const bf = pb.includes("front") || pb.includes("anverso") ? -1 : 0;
-    if (af !== bf) return af - bf;
-    const ab = pa.includes("back") || pa.includes("reverso") ? 1 : 0;
-    const bb = pb.includes("back") || pb.includes("reverso") ? 1 : 0;
-    if (ab !== bb) return ab - bb;
-    return pa.localeCompare(pb);
-  });
-  return entries.map(([, v]) => v.w1200 ?? v.w600!).filter(Boolean);
+
+  return result;
 }
+
 
 /* ======================================================================================
    SEO dinámico
@@ -383,17 +395,14 @@ export default async function ProductPage({
   });
 
   /* 8) GALERÍA */
-  const mediaIdx =
-    (await fetchJsonOrNull<MediaIndex>("media/index.json", {
-      revalidate: 7200, // 2 h
-      tags: ["media_index"],
-    })) ?? ({} as MediaIndex);
 
-  const rawPaths = Array.isArray(mediaIdx?.[data.sku])
-    ? mediaIdx[data.sku]
-    : [];
-  const preferred = selectPreferredImages(rawPaths);
-  const galleryImages: string[] = preferred.slice(0, 4); // paths crudos; ProductGallery los convierte a CDN
+  // Intentamos usar la convención estándar del CDN:
+  // media/{SKU}/front-600.webp
+  // media/{SKU}/back-600.webp
+  const galleryImages = await getSkuGalleryImages(data.sku);
+
+  // Para JSON-LD, si no hay imágenes en el CDN con esa convención,
+  // seguimos cayendo al campo images/image del JSON de producto.
   const jsonImagesAbs = (
     galleryImages.length
       ? galleryImages
