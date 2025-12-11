@@ -136,7 +136,7 @@ export default async function BucketLinksServer(props: {
   // 1) Leer índice desde CDN en servidor (cacheado por 2 h y con tag)
   const indexDoc =
     (await fetchJsonOrNullServer<AllOffersDoc>("prices/index/all_offers.json", {
-      revalidate: 7200,
+      revalidate: 60,
       tags: ["all_offers"],
     })) ?? { offers: [] };
 

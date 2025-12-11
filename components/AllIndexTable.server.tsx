@@ -22,14 +22,15 @@ export default async function AllIndexTableServer(
   // Dealers: cambian poco → ISR con revalidate
   const dealerMeta =
     (await fetchJsonOrNullServer<DealerMeta>("meta/dealers.json", {
-      revalidate: 21600, // 6 h
+      revalidate: 60 * 60 * 24 * 365, // 1 año
       tags: ["dealers"],
     })) ?? {};
 
   // Spot: queremos siempre lo último del CDN (sin cache de Next)
   const spot =
     (await fetchJsonOrNullServer<SpotDoc>("meta/spot.json", {
-      cache: "no-store",
+      revalidate: 60, // 60s
+      tags: ["spot"],
     })) ?? null;
 
   let offersInitial: Offer[] = [];
@@ -41,7 +42,8 @@ export default async function AllIndexTableServer(
       (await fetchJsonOrNullServer<SkuDoc>(
         `prices/sku/${props.forceSku}.json`,
         {
-          cache: "no-store",
+          revalidate: 60, // 60s
+          tags: [`sku:${props.forceSku}`],
         }
       )) ?? null;
 
@@ -51,7 +53,8 @@ export default async function AllIndexTableServer(
     // Tabla general: all_offers del CDN
     const indexDoc =
       (await fetchJsonOrNullServer<IndexDoc>("prices/index/all_offers.json", {
-        cache: "no-store",
+        revalidate: 60, // 60s
+        tags: ["all_offers"],
       })) ?? null;
 
     offersInitial = Array.isArray(indexDoc?.offers) ? indexDoc!.offers : [];

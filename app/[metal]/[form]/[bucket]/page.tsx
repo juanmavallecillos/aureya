@@ -75,7 +75,7 @@ async function isValidBucket(
 ) {
   // ✅ CDN directo con ISR largo y TAG para revalidar por webhook
   const doc = await fetchJsonOrNull<AllIndexDoc>("prices/index/all_offers.json", {
-    revalidate: 7200,                // 2h (se invalida por tag "all_offers")
+    revalidate: 60,                // 60s
     tags: ["all_offers"],
     // timeoutMs: 5000,              // (opcional; el helper ya trae timeout defensivo)
   });

@@ -222,13 +222,14 @@ async function getSkuGalleryImages(sku: string): Promise<string[]> {
   const result: string[] = [];
 
   // HEAD contra el CDN para ver si existe el fichero
+  const IMAGE_REVALIDATE_SECONDS = 60 * 60 * 24 * 365;
   for (const relPath of candidates) {
     const url = cdnPath(relPath);
     try {
       const res = await fetch(url, {
         method: "HEAD",
         // cacheo razonable: no hace falta comprobar en cada request
-        next: { revalidate: 3600, tags: [`media:${sku}`] },
+        next: { revalidate: IMAGE_REVALIDATE_SECONDS, tags: [`media:${sku}`] },
       });
       if (res.ok) {
         result.push(relPath);
@@ -254,7 +255,8 @@ export async function generateMetadata({
   const sku = extractSkuFromSlugParam(slug);
 
   const data = await fetchJsonOrNull<SkuDoc>(`/prices/sku/${sku}.json`, {
-    cache: "no-store",
+    revalidate: 86400,
+    tags: [`sku:${sku}`],
   });
   const meta = data?.meta;
   if (!meta) return { title: sku };
@@ -311,7 +313,7 @@ export default async function ProductPage({
 
   // 1) Datos por SKU
   const data = await fetchJsonOrNull<SkuDoc>(`/prices/sku/${sku}.json`, {
-    revalidate: 7200,
+    revalidate: 86400,
     tags: [`sku:${sku}`],
   });
   if (!data?.meta) redirect("/");
@@ -353,7 +355,8 @@ export default async function ProductPage({
 
   // 3) Histórico
   const history = (await fetchJsonOrNull<HistDoc>(`/history/${sku}.json`, {
-    cache: "no-store",
+    revalidate: 43200, // 12 h
+    tags: [`history:${sku}`],
   }).catch(() => ({ sku, series: [] as HistDoc["series"] }))) ?? {
     sku,
     series: [],
@@ -388,7 +391,8 @@ export default async function ProductPage({
 
   // 7) Spot GLOBAL (servidor) → prop a la tabla
   const spot = await fetchJsonOrNull<SpotDoc>("meta/spot.json", {
-    cache: "no-store",
+    revalidate: 60,
+    tags: ["spot"],
   });
 
   /* 8) GALERÍA */

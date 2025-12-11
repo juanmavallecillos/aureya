@@ -41,14 +41,14 @@ export default async function TiendasPage() {
   // 1) Metadatos de tiendas
   const dealersMeta =
     (await fetchJsonOrNull<DealerMeta>("meta/dealers.json", {
-      revalidate: 300,                 // 5 min
+      revalidate: 60 * 60 * 24 * 365,                 // 1 año
       tags: ["dealers"],
     })) ?? {};
 
   // 2) Índice global de ofertas
   const allOffersDoc =
     (await fetchJsonOrNull<{ offers: Offer[] }>("prices/index/all_offers.json", {
-      revalidate: 300,                 // 5 min
+      revalidate: 60,                 // 1 min
       tags: ["all_offers"],
     })) ?? { offers: [] };
 
