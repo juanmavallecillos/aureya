@@ -255,7 +255,7 @@ export async function generateMetadata({
   const sku = extractSkuFromSlugParam(slug);
 
   const data = await fetchJsonOrNull<SkuDoc>(`/prices/sku/${sku}.json`, {
-    revalidate: 86400,
+    revalidate: 60,
     tags: [`sku:${sku}`],
   });
   const meta = data?.meta;
@@ -313,7 +313,7 @@ export default async function ProductPage({
 
   // 1) Datos por SKU
   const data = await fetchJsonOrNull<SkuDoc>(`/prices/sku/${sku}.json`, {
-    revalidate: 86400,
+    revalidate: 60,
     tags: [`sku:${sku}`],
   });
   if (!data?.meta) redirect("/");
@@ -355,7 +355,7 @@ export default async function ProductPage({
 
   // 3) Histórico
   const history = (await fetchJsonOrNull<HistDoc>(`/history/${sku}.json`, {
-    revalidate: 43200, // 12 h
+    revalidate: 60, // 12 h
     tags: [`history:${sku}`],
   }).catch(() => ({ sku, series: [] as HistDoc["series"] }))) ?? {
     sku,
