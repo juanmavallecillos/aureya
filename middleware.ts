@@ -1,7 +1,15 @@
 // middleware.ts
 import { NextResponse, NextRequest } from "next/server";
 
-const PASS = (process.env.SITE_PASSCODES || "").trim();
+/**
+ * SITE_PASSCODES="Andorrano-V1,OtraPass"
+ */
+function getPasscodes(): string[] {
+  return (process.env.SITE_PASSCODES || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
 
 const BYPASS = [
   "^/api/cdn($|/)",
@@ -13,8 +21,9 @@ const BYPASS = [
   "^/manifest\\.json$",
   "^/assets($|/)",
   "^/.*\\.(?:png|jpe?g|webp|avif|svg|ico|css|js|txt|map)$",
-  "^/api/unlock($|/)", // opcional si usas el endpoint
+  "^/api/unlock($|/)",
   "^/api/revalidate($|/)",
+  "^/unlock($|/)", // 👈 muy importante
 ];
 
 function isBypassed(pathname: string) {
@@ -25,33 +34,39 @@ export function middleware(req: NextRequest) {
   const url = new URL(req.url);
   const { pathname } = url;
 
+  // Rutas públicas
   if (isBypassed(pathname)) return NextResponse.next();
-  if (!PASS) return NextResponse.next();
 
-  // Cookie válida
-  const cookie = req.cookies.get("site-pass");
-  if (cookie?.value === PASS) return NextResponse.next();
+  const passcodes = getPasscodes();
 
-  // Permitir ?pass=... (desde el formulario GET) → set cookie y redirigir limpio
-  const pass = (url.searchParams.get("pass") || "").trim();
-  if (pass && pass === PASS) {
-    const res = NextResponse.redirect(new URL(url.pathname, url.origin));
-    res.cookies.set("site-pass", PASS, {
+  // Si no hay passcodes → web abierta
+  if (!passcodes.length) return NextResponse.next();
+
+  // Cookie válida (modelo limpio)
+  const cookie = req.cookies.get("site-pass")?.value;
+  if (cookie === "ok") return NextResponse.next();
+
+  // Intento de login vía ?pass=...
+  const provided = (url.searchParams.get("pass") || "").trim();
+  if (provided && passcodes.includes(provided)) {
+    const cleanUrl = new URL(url.pathname, url.origin);
+    const res = NextResponse.redirect(cleanUrl);
+    res.cookies.set("site-pass", "ok", {
       httpOnly: true,
       sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 7,
+      maxAge: 60 * 60 * 24 * 7, // 7 días
       path: "/",
       secure: process.env.NODE_ENV === "production",
     });
     return res;
   }
 
-  // API => 401 JSON
+  // APIs protegidas → 401
   if (pathname.startsWith("/api/")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Página de unlock
+  // Todo lo demás → pantalla de unlock
   return NextResponse.rewrite(new URL("/unlock", req.url));
 }
 
