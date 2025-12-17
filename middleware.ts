@@ -1,7 +1,7 @@
 // middleware.ts
 import { NextResponse, NextRequest } from "next/server";
 
-const PASS = (process.env.SITE_PASSCODE || "").trim();
+const PASS = (process.env.SITE_PASSCODES || "").trim();
 
 const BYPASS = [
   "^/api/cdn($|/)",
