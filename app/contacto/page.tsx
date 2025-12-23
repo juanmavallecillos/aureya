@@ -54,38 +54,6 @@ export default function ContactPage() {
         </p>
       </section>
 
-      {/* Acciones rápidas */}
-      <section className="mt-5">
-        <div className="flex flex-wrap gap-2">
-          <Link
-            href="/contacto?topic=incidencia"
-            className="inline-flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 hover:bg-zinc-50
-                       focus-visible:ring-2 focus-visible:ring-[hsl(var(--brand)/0.35)]"
-          >
-            <Bug className="h-4 w-4 text-[hsl(var(--brand))]" />
-            Reportar incidencia / precio
-          </Link>
-
-          <Link
-            href="/contacto?topic=tienda"
-            className="inline-flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 hover:bg-zinc-50
-                       focus-visible:ring-2 focus-visible:ring-[hsl(var(--brand)/0.35)]"
-          >
-            <Building2 className="h-4 w-4 text-[hsl(var(--brand))]" />
-            Soy una tienda
-          </Link>
-
-          <Link
-            href="/contacto?topic=colaboracion"
-            className="inline-flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 hover:bg-zinc-50
-                       focus-visible:ring-2 focus-visible:ring-[hsl(var(--brand)/0.35)]"
-          >
-            <Handshake className="h-4 w-4 text-[hsl(var(--brand))]" />
-            Colaboración / prensa
-          </Link>
-        </div>
-      </section>
-
       {/* Grid dos columnas */}
       <section className="mt-6 grid gap-6 md:grid-cols-[1fr_360px] items-start">
         {/* Form */}
@@ -97,7 +65,7 @@ export default function ContactPage() {
               <h3 className="text-base md:text-lg font-semibold text-zinc-900">Formulario de contacto</h3>
             </div>
             <p className="mt-1 text-sm text-zinc-600">
-              Te contestaremos lo antes posible. Si es una incidencia, incluye el SKU o la URL del producto.
+              Elige un motivo y se abrirá el formulario con una plantilla.
             </p>
           </div>
           <div className="p-5">
