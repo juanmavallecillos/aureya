@@ -6,6 +6,7 @@ import { Redis } from "@upstash/redis";
 
 export const runtime = "nodejs";
 
+/* -------------------- Utils -------------------- */
 function getClientIp(req: Request) {
   const xf = req.headers.get("x-forwarded-for");
   if (xf) return xf.split(",")[0].trim();
@@ -15,16 +16,28 @@ function getClientIp(req: Request) {
 }
 
 function escapeHtml(s: string) {
-  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function isValidEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function clamp(s: string, max: number) {
+  const t = (s || "").trim();
+  return t.length > max ? t.slice(0, max) : t;
 }
 
 function getResend() {
-  const key = process.env.RESEND_API_KEY;
+  const key = (process.env.RESEND_API_KEY || "").trim();
   if (!key) return null;
   return new Resend(key);
 }
 
-// ---- Upstash rate limit ----
+/* -------------------- Upstash -------------------- */
 const redis =
   process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
     ? new Redis({
@@ -33,64 +46,106 @@ const redis =
       })
     : null;
 
-// 5 envíos / 10 minutos por IP
-const ratelimit = redis
+// IP: 3 / 10 min
+const rlIp = redis
   ? new Ratelimit({
       redis,
       limiter: Ratelimit.slidingWindow(3, "10 m"),
       analytics: true,
-      prefix: "rl:contact",
+      prefix: "rl:contact:ip",
     })
   : null;
+
+// Email: 2 / 10 min
+const rlEmail = redis
+  ? new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(2, "10 m"),
+      analytics: true,
+      prefix: "rl:contact:email",
+    })
+  : null;
+
+function rateLimitHeaders(limit: number, remaining: number, reset: number) {
+  return {
+    "X-RateLimit-Limit": String(limit),
+    "X-RateLimit-Remaining": String(remaining),
+    "X-RateLimit-Reset": String(reset),
+  };
+}
+
+/* -------------------- Handler -------------------- */
+const TOPICS = ["general", "incidencia", "tienda", "colaboracion", "legal"] as const;
+type Topic = (typeof TOPICS)[number];
 
 export async function POST(req: Request) {
   const ip = getClientIp(req);
 
-  // Rate limit (si no está configurado, deja pasar pero avisa en header)
-  if (ratelimit) {
-    const { success, limit, remaining, reset } = await ratelimit.limit(`ip:${ip}`);
-    if (!success) {
-      return NextResponse.json(
-        { ok: false, error: "Too many requests" },
-        {
-          status: 429,
-          headers: {
-            "Retry-After": String(Math.max(1, Math.ceil((reset - Date.now()) / 1000))),
-            "X-RateLimit-Limit": String(limit),
-            "X-RateLimit-Remaining": String(remaining),
-            "X-RateLimit-Reset": String(reset),
-          },
-        }
-      );
-    }
-  }
-
   try {
     const body = (await req.json()) as {
       name?: string;
-      from?: string;   // viene de tu ContactForm
-      topic?: string;  // viene de tu ContactForm
-      msg?: string;    // viene de tu ContactForm
-      hp?: string;     // honeypot opcional
+      from?: string; // ContactForm
+      topic?: string; // ContactForm
+      msg?: string; // ContactForm
+      hp?: string; // honeypot opcional
     };
 
-    // Honeypot
-    if (body.hp) return NextResponse.json({ ok: true }, { status: 200 });
+    // Honeypot -> responde OK sin hacer nada
+    if (body?.hp) return NextResponse.json({ ok: true }, { status: 200 });
 
-    const name = (body.name || "").trim();
-    const email = (body.from || "").trim();
-    const topic = (body.topic || "consulta").trim();
-    const message = (body.msg || "").trim();
+    const name = clamp(body?.name || "", 80);
+    const email = clamp(body?.from || "", 120).toLowerCase();
+    const topicRaw = (body?.topic || "general").trim().toLowerCase();
+    const topic: Topic = (TOPICS.includes(topicRaw as Topic) ? (topicRaw as Topic) : "general");
+    const message = (body?.msg || "").trim();
 
+    // Validaciones
     if (!email || !message) {
       return NextResponse.json({ ok: false, error: "Email y mensaje son obligatorios" }, { status: 400 });
     }
-
-    // Validación simple email
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    if (!isValidEmail(email)) {
       return NextResponse.json({ ok: false, error: "Email inválido" }, { status: 400 });
     }
+    if (message.length < 20) {
+      return NextResponse.json({ ok: false, error: "El mensaje es demasiado corto" }, { status: 400 });
+    }
+    if (message.length > 2000) {
+      return NextResponse.json({ ok: false, error: "El mensaje es demasiado largo (máx. 2000 caracteres)" }, { status: 400 });
+    }
 
+    // Rate limit (si no hay Upstash configurado, deja pasar)
+    if (rlIp) {
+      const r = await rlIp.limit(`ip:${ip}`);
+      if (!r.success) {
+        return NextResponse.json(
+          { ok: false, error: "Too many requests" },
+          {
+            status: 429,
+            headers: {
+              "Retry-After": String(Math.max(1, Math.ceil((r.reset - Date.now()) / 1000))),
+              ...rateLimitHeaders(r.limit, r.remaining, r.reset),
+            },
+          }
+        );
+      }
+    }
+    if (rlEmail) {
+      const r = await rlEmail.limit(`email:${email}`);
+      if (!r.success) {
+        return NextResponse.json(
+          { ok: false, error: "Too many requests" },
+          {
+            status: 429,
+            headers: {
+              "Retry-After": String(Math.max(1, Math.ceil((r.reset - Date.now()) / 1000))),
+              ...rateLimitHeaders(r.limit, r.remaining, r.reset),
+            },
+          }
+        );
+      }
+    }
+
+    // Envío de email
     const resend = getResend();
     if (!resend) {
       return NextResponse.json(
@@ -99,23 +154,31 @@ export async function POST(req: Request) {
       );
     }
 
-    const CONTACT_TO = process.env.CONTACT_TO || "contacto@aureya.es";
-    const CONTACT_FROM = process.env.CONTACT_FROM || "Aureya <noreply@aureya.es>";
+    const CONTACT_TO = (process.env.CONTACT_TO || "contacto@aureya.es").trim();
 
-    const subject = `Contacto (${topic}) · Aureya`;
+    // Recomendación: que exista de verdad en tu dominio (Zoho), p.ej. contacto@aureya.es
+    const CONTACT_FROM = (process.env.CONTACT_FROM || "Aureya <contacto@aureya.es>").trim();
+
+    const topicLabel: Record<Topic, string> = {
+      general: "General",
+      incidencia: "Incidencia / precio",
+      tienda: "Soy una tienda",
+      colaboracion: "Colaboración / prensa",
+      legal: "Legal",
+    };
+
+    const subject = `[Contacto] ${topicLabel[topic]} — ${email}`;
 
     const text = [
       `De: ${name || "(sin nombre)"} <${email}>`,
-      `Tema: ${topic}`,
-      `IP: ${ip}`,
+      `Tema: ${topicLabel[topic]}`,
       "",
       message,
     ].join("\n");
 
     const html = `
       <p><strong>De:</strong> ${escapeHtml(name || "(sin nombre)")} &lt;${escapeHtml(email)}&gt;</p>
-      <p><strong>Tema:</strong> ${escapeHtml(topic)}</p>
-      <p style="color:#999"><strong>IP:</strong> ${escapeHtml(ip)}</p>
+      <p><strong>Tema:</strong> ${escapeHtml(topicLabel[topic])}</p>
       <hr/>
       <pre style="white-space:pre-wrap;font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;">${escapeHtml(
         message

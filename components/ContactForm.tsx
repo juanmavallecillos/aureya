@@ -336,6 +336,16 @@ export default function ContactForm({ className }: Props) {
           </span>
         )}
       </div>
+      <p className="text-xs text-zinc-500">
+        Al enviar aceptas nuestra{" "}
+        <a
+          href="/privacidad"
+          className="text-[hsl(var(--brand))] hover:underline"
+        >
+          Política de privacidad
+        </a>
+        .
+      </p>
     </form>
   );
 }
